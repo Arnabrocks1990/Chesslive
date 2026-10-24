@@ -258,7 +258,8 @@ def main():
             except Exception:
                 conn = connect_db()  # the connection itself died (Postgres restarted): replace it
             retries = job.get("_retries", 0)
-            if retries < MAX_RETRIES and job.get("kind") != "train":
+            gone = isinstance(e, psycopg.errors.ForeignKeyViolation)  # the game was deleted: a retry can never succeed
+            if retries < MAX_RETRIES and job.get("kind") != "train" and not gone:
                 job["_retries"] = retries + 1
                 try:
                     rds.rpush(queue, json.dumps(job))  # back to the front: it is next in line (the loop pops from the right)

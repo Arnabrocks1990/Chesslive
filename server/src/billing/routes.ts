@@ -1,5 +1,6 @@
 import type { Express, Request, Response } from "express";
 import type { User } from "../auth.js";
+import { isDbUnavailable } from "../db.js";
 import { BillingError, coachBilling, startCheckout, submitUtr } from "./service.js";
 
 type Authed = (req: Request, res: Response) => User | null;
@@ -11,6 +12,7 @@ export function registerBillingRoutes(app: Express, authed: Authed) {
     if (!user) return;
     fn(req, res, user).catch((e) => {
       if (e instanceof BillingError) return void res.status(400).json({ error: e.message });
+      if (isDbUnavailable(e)) return void res.status(503).json({ error: "The server could not reach its database. Please try again in a moment." });
       console.error(e);
       res.status(500).json({ error: "Server error" });
     });

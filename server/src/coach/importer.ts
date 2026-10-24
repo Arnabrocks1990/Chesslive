@@ -123,7 +123,9 @@ export function splitPgns(text: string): string[] {
 
 /** Stores a game and its moves. Returns the game id, or null if it was already imported. */
 export async function storeGame(playerId: number, source: string, g: ImportedGame): Promise<number | null> {
-  const exists = await query(`SELECT id FROM games WHERE source=$1 AND external_id=$2`, [source, g.externalId]);
+  // Duplicates are per player: importing the same game twice is a no-op, but two different players (friends who
+  // played each other, or two people pasting the same PGN) must each get their own copy.
+  const exists = await query(`SELECT id FROM games WHERE player_id=$1 AND source=$2 AND external_id=$3`, [playerId, source, g.externalId]);
   if (exists.length) return null;
   const replay = new Chess();
   const rows: [number, string, string, string, number][] = [];

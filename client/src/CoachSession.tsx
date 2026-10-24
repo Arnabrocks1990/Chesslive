@@ -184,6 +184,7 @@ export function CoachSession() {
   const [outcome, setOutcome] = useState<any>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const [answering, setAnswering] = useState(false); // an answer is in flight: ignore further drops
   const [hl, setHl] = useState<Hint["highlight"] | null>(null);
   const { lang } = useLang();
   const { speak } = useVoice();
@@ -191,6 +192,7 @@ export function CoachSession() {
 
   const load = useCallback(async () => {
     const d = await api<SessionView>(`/coach/sessions/${sid}`);
+    setErr("");
     setV(d);
     if (d.question) setFen(d.question.fen);
     return d;
@@ -223,14 +225,27 @@ export function CoachSession() {
     } catch (e: any) { setErr(e.message === "payment_required" ? "This day is part of Pro." : e.message); } finally { setBusy(false); }
   };
   const drop = (from: string, to: string) => {
-    if (verdict || !v.question) return false;
-    const c = new Chess(v.question.fen);
+    if (verdict || !v.question || answering) return false;
+    const question = v.question;
+    const c = new Chess(question.fen);
     let mv;
     try { mv = c.move({ from, to, promotion: "q" }); } catch { return false; }
     setFen(c.fen());
-    api<any>(`/coach/session-questions/${v.question.id}/answer`, { uci: mv.from + mv.to + (mv.promotion ?? "") })
+    setAnswering(true);
+    setErr("");
+    api<any>(`/coach/session-questions/${question.id}/answer`, { uci: mv.from + mv.to + (mv.promotion ?? "") })
       .then((r) => { setVerdict(r.verdict); if (r.finished) setOutcome(r.outcome); })
-      .catch((e) => setErr(e.message));
+      .catch((e) => {
+        if (/already answered/i.test(e.message)) {
+          // The first request got through but its reply was lost (or another tab answered). Show the real state.
+          load().catch((le) => setErr(le.message));
+          return;
+        }
+        // Not recorded: put the piece back so the same position can be answered again.
+        setFen(question.fen);
+        setErr(`${e.message} Your answer was not recorded. Move the piece again.`);
+      })
+      .finally(() => setAnswering(false));
     return true;
   };
   const finished = !!outcome;
@@ -272,7 +287,7 @@ export function CoachSession() {
 
       {s.type !== "play" && s.state === "active" && !finished && v.question && (
         <section className="card trainer">
-          <Chessboard id="sess" position={verdict && lang === "plain" && verdict.fen ? verdict.fen : fen} customSquareStyles={verdict ? {} : highlightStyles(hl)} customArrows={arrowsFor(verdict, lang) as any} boardWidth={420} boardOrientation={v.question.turn === "w" ? "white" : "black"} arePiecesDraggable={!verdict} onPieceDrop={(f, t) => drop(f, t)} />
+          <Chessboard id="sess" position={verdict && lang === "plain" && verdict.fen ? verdict.fen : fen} customSquareStyles={verdict ? {} : highlightStyles(hl)} customArrows={arrowsFor(verdict, lang) as any} boardWidth={420} boardOrientation={v.question.turn === "w" ? "white" : "black"} arePiecesDraggable={!verdict && !answering} onPieceDrop={(f, t) => drop(f, t)} />
           <div className="drillside">
             <h2>2 · Find the better move</h2>
             <div className="dots">{Array.from({ length: v.progress.total }, (_, i) => <span key={i} className={`dot ${v.progress.results[i] ?? (i === v.progress.answered ? "now" : "")}`} />)}</div>
@@ -282,7 +297,7 @@ export function CoachSession() {
               <div className={`verdict ${verdict.pass ? "pass" : "fail"}`}>
                 <b>{verdict.pass ? "Correct" : "Not quite"}</b>{verdict.hintsUsed > 0 && <span className="muted small"> · used {verdict.hintsUsed} hint{verdict.hintsUsed > 1 ? "s" : ""}</span>}
                 <VerdictBody v={verdict} />
-                <button className="primary" onClick={() => { setVerdict(null); setHl(null); load(); }}>Next position</button>
+                <button className="primary" onClick={() => { setVerdict(null); setHl(null); load().catch((e) => setErr(e.message)); }}>Next position</button>
               </div>
             )}
           </div>
@@ -321,7 +336,7 @@ export function CoachSession() {
           <p>{outcome?.result ?? (s.type === "play" ? `${s.score} blunder(s)` : `${s.score}/${s.total} correct`)}</p>
           {outcome?.decision && <div className="coachsays"><b>Coach:</b> {outcome.decision}</div>}
           <div className="row">
-            {outcome?.status === "retry" && <button className="primary" onClick={() => { setOutcome(null); setVerdict(null); load(); }}>Try again</button>}
+            {outcome?.status === "retry" && <button className="primary" onClick={() => { setOutcome(null); setVerdict(null); load().catch((e) => setErr(e.message)); }}>Try again</button>}
             {advance && v.nextSessionId && <button className="primary" onClick={() => nav(`/coach/${id}/day/${v.nextSessionId}`)}>Continue to Day {v.nextDay}</button>}
             {advance && v.isLast && <button className="primary" onClick={() => nav(`/coach/${id}`)}>See your new plan</button>}
             <button onClick={() => nav(`/coach/${id}`)}>Back to plan</button>

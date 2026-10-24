@@ -10,6 +10,20 @@ export const PRICE_INR = 299;
 const MAX_BLUNDERS = 2;
 const SET_SIZE = 5;
 
+const locks = new Map<number, Promise<unknown>>();
+/**
+ * Runs fn after any earlier call for the same session has finished. A double-click, a retry or two tabs must not
+ * start two question sets, count one answer twice, or evaluate one milestone twice. (One web instance by design.)
+ */
+export function withSessionLock<T>(sessionId: number, fn: () => Promise<T>): Promise<T> {
+  const prev = locks.get(sessionId) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  const tail = next.catch(() => undefined);
+  locks.set(sessionId, tail);
+  void tail.then(() => { if (locks.get(sessionId) === tail) locks.delete(sessionId); });
+  return next;
+}
+
 export type State = "locked" | "paywall" | "available" | "active" | "retry" | "done";
 
 export async function isPro(playerId: number) {
@@ -93,8 +107,13 @@ async function pickQuestions(s: any): Promise<number[]> {
 }
 
 /** Starts (or resumes) a session. Practice games need a callback that creates a bot game for the user. */
-export async function startSession(sessionId: number, ctx: { createBotGame: () => Promise<string>; force?: boolean }) {
+export function startSession(sessionId: number, ctx: { createBotGame: () => Promise<string>; force?: boolean }) {
+  return withSessionLock(sessionId, () => startSessionLocked(sessionId, ctx));
+}
+
+async function startSessionLocked(sessionId: number, ctx: { createBotGame: () => Promise<string>; force?: boolean }) {
   const [s] = await query<any>(`SELECT * FROM plan_sessions WHERE id=$1`, [sessionId]);
+  if (!s) throw new Error("Session not found");
   if (s.type === "play") {
     if (s.status === "active" && s.game_code && !ctx.force) return { gameCode: s.game_code };
     const code = await ctx.createBotGame();
@@ -134,12 +153,20 @@ export async function sessionView(sessionId: number, playerId: number, hooks?: {
 
 /** Records one answer. Returns the verdict and, when the set is finished, the session outcome. */
 export async function answerQuestion(questionId: number, uci: string, hooks: { weekly: () => Promise<unknown> }) {
+  const [pre] = await query<{ session_id: number }>(`SELECT session_id FROM session_questions WHERE id=$1`, [questionId]);
+  if (!pre) throw new Error("Question not found");
+  return withSessionLock(pre.session_id, () => answerLocked(questionId, uci, hooks));
+}
+
+async function answerLocked(questionId: number, uci: string, hooks: { weekly: () => Promise<unknown> }) {
   const [q] = await query<any>(
     `SELECT q.*, m.best_uci, m.best_san, m.pv, m.played_san, m.explanation, m.player_id FROM session_questions q JOIN mistakes m ON m.id=q.mistake_id WHERE q.id=$1`, [questionId]);
   if (!q) throw new Error("Question not found");
   if (q.result) throw new Error("Question already answered");
   const pass = uci === q.best_uci;
-  await query(`UPDATE session_questions SET result=$2, answered_at=now() WHERE id=$1`, [q.id, pass ? "pass" : "fail"]);
+  // Atomic as well as locked: only the call that flips result from NULL gets to count the answer.
+  const claimed = await query(`UPDATE session_questions SET result=$2, answered_at=now() WHERE id=$1 AND result IS NULL RETURNING id`, [q.id, pass ? "pass" : "fail"]);
+  if (!claimed.length) throw new Error("Question already answered");
   await query(
     `INSERT INTO drills (player_id, mistake_id, attempts, passes, last_result, interval_days, due_at)
      VALUES ($1,$2,1,$3,$4,1, CASE WHEN $3::int=1 THEN now() + interval '1 day' ELSE now() END)
@@ -186,7 +213,11 @@ async function finishSession(sessionId: number, score: number, total: number, ho
 }
 
 /** Practice games are judged by Stockfish's post-game report once the game is over. */
-export async function resolvePlay(sessionId: number, hooks?: { weekly: () => Promise<unknown> }) {
+export function resolvePlay(sessionId: number, hooks?: { weekly: () => Promise<unknown> }) {
+  return withSessionLock(sessionId, () => resolvePlayLocked(sessionId, hooks));
+}
+
+async function resolvePlayLocked(sessionId: number, hooks?: { weekly: () => Promise<unknown> }) {
   const [s] = await query<any>(`SELECT * FROM plan_sessions WHERE id=$1`, [sessionId]);
   if (!s || s.type !== "play" || s.status !== "active" || !s.game_code) return null;
   const [g] = await query<any>(`SELECT id, status, white_id, created_by FROM games WHERE code=$1`, [s.game_code]);

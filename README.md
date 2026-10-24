@@ -65,6 +65,10 @@ See [DEPLOY.md](DEPLOY.md) for Render (`render.yaml` Blueprint: web service, Sto
 - Profiles that existed before ownership was added were assigned to the admin account.
 - **Test:** `node server/test/privacy.mjs` (35 checks, about a minute; creates and removes its own data).
 
+## Tests
+
+With the stack and servers running (each creates and removes its own data): `node server/test/smoke.mjs` (game + admin-only assist), `elo.mjs`, `bot.mjs`, `privacy.mjs` (35 checks), `billing.mjs` (payments), `session.mjs` (coach session double-actions, imports, deletion), `outage.mjs` (stops and restarts Postgres; expects the server and worker to recover by themselves), `deploy.mjs` (fresh database, see DEPLOY.md).
+
 ## Payments and the admin dashboard
 
 - **What is paid:** AI Coach Days 3-7 (Days 1-2 stay free), per coach profile, 30 days. Price, UPI ID and payee name are editable in the dashboard (Settings); default 299 INR; the UPI ID and payee name come from `UPI_ID` / `PAYEE_NAME` on first boot.

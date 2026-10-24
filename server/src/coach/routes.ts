@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import type { Express, Request, Response } from "express";
 import type { Redis } from "ioredis";
 import { Chess } from "chess.js";
-import { query } from "../db.js";
+import { isDbUnavailable, query } from "../db.js";
 import { askClaude } from "../claude.js";
 import { config } from "../config.js";
 import { evaluateProgress, isRunning, rankWeaknesses, startRun } from "./agent.js";
@@ -18,6 +18,7 @@ type Authed = (req: Request, res: Response) => User | null;
 const INTERVALS = [1, 3, 7, 14];
 const wrap = (fn: (req: Request, res: Response) => Promise<unknown>) => (req: Request, res: Response) =>
   fn(req, res).catch((e) => {
+    if (isDbUnavailable(e)) return void res.status(503).json({ error: "The server could not reach its database. Please try again in a moment." });
     const user = /not found|Network error|returned \d+|PGN|Provide|must|No games|already|Finish|Not enough|Hints unlock|No hint|No plan/i.test(e.message);
     if (!user) console.error(e);
     res.status(user ? 400 : 500).json({ error: user ? e.message : "Server error" });
@@ -191,6 +192,9 @@ export function registerCoachRoutes(app: Express, redis: Redis, authed: Authed, 
   app.post("/api/coach/players/:id/delete", guard(async (req, res) => {
     const id = Number(req.params.id);
     await query(`DELETE FROM games WHERE player_id=$1`, [id]);
+    // Plan sessions (and, by cascade, their questions) and the cached plain-English text hold the player's data too.
+    await query(`DELETE FROM plain_cache WHERE plan_id IN (SELECT id FROM plans WHERE player_id=$1)`, [id]).catch(() => undefined);
+    await query(`DELETE FROM plan_sessions WHERE player_id=$1`, [id]).catch(() => undefined);
     for (const t of ["drills", "plans", "agent_runs", "mistakes"]) await query(`DELETE FROM ${t} WHERE player_id=$1`, [id]).catch(() => undefined);
     await query(`DELETE FROM players WHERE id=$1`, [id]);
     res.json({ ok: true });

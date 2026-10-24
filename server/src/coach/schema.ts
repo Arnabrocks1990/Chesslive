@@ -8,7 +8,9 @@ export async function ensureCoachSchema() {
     `ALTER TABLE games ADD COLUMN IF NOT EXISTS player_id INT`,
     `ALTER TABLE games ADD COLUMN IF NOT EXISTS player_color TEXT`,
     `ALTER TABLE games ADD COLUMN IF NOT EXISTS played_at TIMESTAMPTZ`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS games_source_ext ON games(source, external_id) WHERE external_id IS NOT NULL`,
+    // Was global (source, external_id), which made a second player's import of the same game silently store nothing.
+    `DROP INDEX IF EXISTS games_source_ext`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS games_player_source_ext ON games(player_id, source, external_id) WHERE external_id IS NOT NULL`,
     `CREATE TABLE IF NOT EXISTS players (
        id SERIAL PRIMARY KEY,
        platform TEXT NOT NULL,            -- lichess | chesscom | pgn

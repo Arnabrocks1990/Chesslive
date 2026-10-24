@@ -210,30 +210,61 @@ def handle(job, engine, conn, rds):
     }))
 
 
+def connect_db():
+    """Blocks until Postgres accepts a connection (it may be restarting)."""
+    while True:
+        try:
+            return psycopg.connect(DATABASE_URL)
+        except Exception as e:
+            print("waiting for postgres:", e, flush=True)
+            time.sleep(2)
+
+
+MAX_RETRIES = 2  # a failed job is retried before it is dropped; a lost bot move would leave a human waiting forever
+
+
 def main():
     rds = redis.Redis.from_url(REDIS_URL)
     while True:
         try:
-            conn = psycopg.connect(DATABASE_URL)
             rds.ping()
             break
         except Exception as e:  # services still starting
-            print("waiting for postgres/redis:", e, flush=True)
+            print("waiting for redis:", e, flush=True)
             time.sleep(2)
+    conn = connect_db()
     engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
     engine.configure({"Threads": int(os.environ.get("SF_THREADS", "2")), "Hash": int(os.environ.get("SF_HASH", "128"))})
     load_model(conn)
     print("worker ready", flush=True)
     while True:
-        # bot moves first (a human is waiting), then live suggestions, then post-game work
-        item = rds.brpop(["analysis:bot", "analysis:live", "analysis:post"], timeout=5)
+        try:
+            # bot moves first (a human is waiting), then live suggestions, then post-game work
+            item = rds.brpop(["analysis:bot", "analysis:live", "analysis:post"], timeout=5)
+        except redis.exceptions.RedisError as e:
+            print("redis unavailable, retrying:", e, flush=True)
+            time.sleep(2)
+            continue
         if not item:
             continue
+        queue, raw = item[0].decode(), item[1]
+        job = json.loads(raw)
         try:
-            handle(json.loads(item[1]), engine, conn, rds)
+            handle(job, engine, conn, rds)
         except Exception as e:
-            conn.rollback()
             print("job failed:", e, flush=True)
+            try:
+                conn.rollback()
+            except Exception:
+                conn = connect_db()  # the connection itself died (Postgres restarted): replace it
+            retries = job.get("_retries", 0)
+            if retries < MAX_RETRIES and job.get("kind") != "train":
+                job["_retries"] = retries + 1
+                try:
+                    rds.rpush(queue, json.dumps(job))  # back to the front: it is next in line (the loop pops from the right)
+                except Exception:
+                    pass
+                time.sleep(1)
 
 
 if __name__ == "__main__":

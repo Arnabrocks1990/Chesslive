@@ -10,7 +10,7 @@ import * as auth from "./auth.js";
 import { askClaude } from "./claude.js";
 import { assertProductionConfig, config } from "./config.js";
 import { ensureBaseSchema } from "./baseSchema.js";
-import { query } from "./db.js";
+import { isDbUnavailable, query } from "./db.js";
 import { GameError, GameManager } from "./games.js";
 import { buildReport } from "./report.js";
 import { buildProfile } from "./profile.js";
@@ -29,6 +29,10 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
 const redis = new Redis(config.redisUrl);
 const sub = new Redis(config.redisUrl);
+// ioredis reconnects by itself; without a handler every failed attempt prints an 'Unhandled error event' stack.
+let lastRedisLog = 0;
+for (const r of [redis, sub]) r.on("error", (e) => { if (Date.now() - lastRedisLog > 30_000) { lastRedisLog = Date.now(); console.error("redis unavailable (retrying):", e.message); } });
+process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e));
 const games = new GameManager(io, redis);
 
 // ---- REST -----------------------------------------------------------------
@@ -37,6 +41,7 @@ const wrap =
   (fn: (req: express.Request, res: express.Response) => Promise<unknown>) =>
   (req: express.Request, res: express.Response) =>
     fn(req, res).catch((e) => {
+      if (isDbUnavailable(e)) return void res.status(503).json({ error: "The server could not reach its database. Please try again in a moment." });
       const status = e instanceof GameError || /taken|Invalid|must be/.test(e.message) ? 400 : 500;
       if (status === 500) console.error(e);
       res.status(status).json({ error: status === 500 ? "Server error" : e.message });

@@ -1,0 +1,10 @@
+# Used by Render (render.yaml). Same as Dockerfile, but installs Python packages straight from PyPI:
+# Render's network has no TLS-intercepting proxy, so the pre-downloaded wheels folder is not needed.
+FROM python:3.12-slim
+RUN apt-get update && apt-get install -y --no-install-recommends stockfish && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY worker.py .
+ENV STOCKFISH_PATH=/usr/games/stockfish
+CMD ["python", "-u", "worker.py"]

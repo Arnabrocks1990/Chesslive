@@ -5,7 +5,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import express from "express";
 import * as auth from "../auth.js";
-import { config } from "../config.js";
+import { assertProductionConfig, config } from "../config.js";
+import { ensureBaseSchema } from "../baseSchema.js";
 import { pool, query } from "../db.js";
 import { ensureBillingSchema } from "../billing/schema.js";
 import { getSettings } from "../billing/service.js";
@@ -16,7 +17,7 @@ const HOST = "127.0.0.1";
 const SUBSCRIPTION_DAYS = 30; // must match the coach's subscription length
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "1mb" })); // room for the QR image upload
 
 // DNS-rebinding guard: only answer requests addressed to localhost on our port.
 const ALLOWED_HOSTS = new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
@@ -264,7 +265,29 @@ app.post("/api/admin/payments/:id/revoke", wrap(async (req, res) => {
 
 // ---- settings + audit ------------------------------------------------------------------
 
-app.get("/api/admin/settings", wrap(async (_req, res) => res.json(await getSettings())));
+const QR_KEYS = ["qr_image", "qr_type"];
+app.get("/api/admin/settings", wrap(async (_req, res) => {
+  const all = await getSettings();
+  res.json({ ...Object.fromEntries(Object.entries(all).filter(([k]) => !QR_KEYS.includes(k))), qr_set: !!all.qr_image });
+}));
+
+// Upload the payment QR image (PNG or JPEG, up to ~600 KB). Stored in the database, served by the game server.
+app.post("/api/admin/settings/qr", wrap(async (req, res) => {
+  const m = /^data:(image\/(?:png|jpeg));base64,([A-Za-z0-9+/=]+)$/.exec(String(req.body?.dataUrl ?? ""));
+  if (!m) throw new HttpError(400, "Choose a PNG or JPEG image");
+  const bytes = Buffer.from(m[2], "base64");
+  if (bytes.length > 600_000) throw new HttpError(400, "Image is too large (limit about 600 KB)");
+  const isPng = bytes.subarray(0, 4).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47]));
+  const isJpeg = bytes.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]));
+  if (!(m[1] === "image/png" ? isPng : isJpeg)) throw new HttpError(400, "That file is not a valid image");
+  for (const [k, v] of [["qr_image", m[2]], ["qr_type", m[1]]]) {
+    await query(`INSERT INTO settings (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`, [k, v]);
+  }
+  await query(`INSERT INTO admin_audit (admin_id, action, target_type, detail) VALUES ($1,'settings.qr','settings',$2)`, [
+    me(req).id, JSON.stringify({ type: m[1], bytes: bytes.length }),
+  ]);
+  res.json({ ok: true, bytes: bytes.length });
+}));
 app.post("/api/admin/settings", wrap(async (req, res) => {
   const b = req.body ?? {};
   const price = Number(b.price_inr);
@@ -307,7 +330,10 @@ if (fs.existsSync(dist)) {
   app.get("/", (_req, res) => res.status(503).send("Admin UI is not built yet. Run: cd admin && npm install && npm run build"));
 }
 
+// Deliberately no ensureAdmin() here: this process often runs on a laptop against the production database,
+// and it must never reset the production admin password. The web server owns the admin account.
+assertProductionConfig();
+await ensureBaseSchema();
 await ensureBillingSchema();
 await ensureCoachSchema();
-await auth.ensureAdmin();
 app.listen(PORT, HOST, () => console.log(`Admin dashboard on http://localhost:${PORT} (bound to ${HOST} only)`));

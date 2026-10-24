@@ -24,6 +24,7 @@ export function verifyToken(token: string): User | null {
   }
 }
 
+/** Creates the admin account, or resets its password to ADMIN_PASSWORD (the env value is the source of truth). */
 export async function ensureAdmin() {
   const hash = await bcrypt.hash(config.adminPassword, 10);
   await query(

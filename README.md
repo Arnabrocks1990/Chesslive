@@ -52,6 +52,10 @@ Open `/coach`. Enter a Lichess username (or paste a PGN) and the coach agent run
 - Finished games only; no live-game assistance for players. `POST /api/coach/players/:id/delete` removes a player's data.
 - Chess.com import is implemented but the API returned 403 from this network in testing; use Lichess or PGN paste if it does.
 
+## Deploying
+
+See [DEPLOY.md](DEPLOY.md) for Render (`render.yaml` Blueprint: web service, Stockfish worker, Postgres with pgvector, Redis). In production the server refuses to start with the default admin password or JWT secret. Check a deployment with `node server/test/deploy.mjs` (see the file header).
+
 ## Privacy
 
 - **Coach profiles are private.** Each profile has an owner (`players.owner_id`). Every Coach URL that points at a profile, run, session, question or drill goes through one gate (`server/src/coach/access.ts`) that allows only the owner or an admin; anyone else gets a 404 that looks the same as "does not exist". The profile list shows only your own (admins see all, with the owner's name). Payment pages follow the same rule.
@@ -69,7 +73,7 @@ Open `/coach`. Enter a Lichess username (or paste a PGN) and the coach agent run
 - **Dashboard tabs:** Payments, Overview (users, games, revenue, coach, model), Users (with detail), Games, Coach (profiles and subscriptions, demo unlocks flagged), Settings, Audit log.
 - **Run it:** `cd server && npm run admin` (separate process from `npm start`). Build the UI once: `cd admin && npm install && npm run build`. Port via `ADMIN_PORT`.
 - **Security:** bound to 127.0.0.1 only, admin accounts only, foreign Host headers refused, login rate-limited, confirm/reject/revoke exist only on this server (the game server has no such endpoint). The dashboard warns while the admin password is still `admin123`; set `ADMIN_PASSWORD` in `server/.env`.
-- **Your QR is not in the repo.** Put your own QR image at `client/public/payment-qr.png` (it is git-ignored because it shows your UPI ID), set `UPI_ID` and `PAYEE_NAME` in `server/.env` before the first start (or edit them later in the dashboard's Settings), and rebuild the client. If you change the UPI ID later, replace the image too.
+- **Your QR is not in the repo** (it shows your UPI ID). Upload it in the dashboard: **Settings > Payment QR image**. It is stored in the database and served by the game server at `/payment-qr.png`; a file at `client/public/payment-qr.png` (git-ignored) still works as a local fallback. Set `UPI_ID` and `PAYEE_NAME` in `server/.env` before the first start, or edit them later in Settings. If you change the UPI ID, upload the matching QR too.
 - **Test:** with both servers running, `node server/test/billing.mjs` (37 checks; creates and removes its own data).
 
 ## Layout

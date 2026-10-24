@@ -221,7 +221,7 @@ def main():
             print("waiting for postgres/redis:", e, flush=True)
             time.sleep(2)
     engine = chess.engine.SimpleEngine.popen_uci(STOCKFISH_PATH)
-    engine.configure({"Threads": 2, "Hash": 128})
+    engine.configure({"Threads": int(os.environ.get("SF_THREADS", "2")), "Hash": int(os.environ.get("SF_HASH", "128"))})
     load_model(conn)
     print("worker ready", flush=True)
     while True:

@@ -1,0 +1,88 @@
+# Render Blueprint for Chess Live. See DEPLOY.md for the step-by-step guide.
+#
+#   web      Node server: API + WebSocket game server + the built React client (also serves /healthz)
+#   worker   Python + Stockfish analysis worker (Docker). Render has no free plan for workers.
+#   db       Postgres with the pgvector extension (applied by the server at boot from db/init.sql)
+#   redis    Key Value instance holding the analysis / bot job queues
+#
+# The admin dashboard is NOT deployed on purpose: it can confirm payments, so it only ever listens on
+# 127.0.0.1. You run it on your own computer against this database (see DEPLOY.md, step 5).
+#
+# Plans are left at Render's defaults so the Blueprint never names a plan that no longer exists.
+# Change them in the dashboard if you want something bigger or cheaper.
+
+databases:
+  - name: chesslive-db
+    databaseName: chesslive
+    user: chesslive
+    # Internal connections only until you add your own IP in the dashboard (Access Control), which the
+    # local admin dashboard needs. An empty list blocks all outside access.
+    ipAllowList: []
+
+services:
+  - type: keyvalue
+    name: chesslive-redis
+    ipAllowList: []            # internal only
+    maxmemoryPolicy: noeviction # these are job queues: never silently drop keys under memory pressure
+
+  - type: web
+    name: chesslive-web
+    runtime: node
+    healthCheckPath: /healthz
+    # Render sets NODE_ENV=production, which makes npm skip devDependencies; the build needs vite and the
+    # server runs through tsx, so install them explicitly.
+    buildCommand: npm --prefix client ci --include=dev && npm --prefix client run build && npm --prefix server ci --include=dev
+    startCommand: npm --prefix server start
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chesslive-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: chesslive-redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ADMIN_USERNAME
+        value: admin
+      - key: ADMIN_PASSWORD      # you are asked for this when you create the Blueprint (12+ characters)
+        sync: false
+      - key: ANTHROPIC_API_KEY   # optional: AI explanations / coach text; blank = rule-based fallbacks
+        sync: false
+      - key: ELEVENLABS_API_KEY  # optional: voiceover; blank = the browser's own voice
+        sync: false
+      - key: UPI_ID              # shown on the paywall until you change it in the admin dashboard
+        sync: false
+      - key: PAYEE_NAME
+        sync: false
+
+  - type: worker
+    name: chesslive-worker
+    runtime: docker
+    dockerfilePath: ./worker/Dockerfile.render
+    dockerContext: ./worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: chesslive-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: chesslive-redis
+          property: connectionString
+      # Sized for a small instance (about 0.5 CPU / 512 MB). Raise these if you pick a bigger plan.
+      - key: SF_THREADS
+        value: "1"
+      - key: SF_HASH
+        value: "64"
+      - key: LIVE_DEPTH
+        value: "14"
+      - key: POST_DEPTH
+        value: "10"

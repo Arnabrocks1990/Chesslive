@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS vector;
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id            SERIAL PRIMARY KEY,
   username      TEXT UNIQUE NOT NULL,
   password_hash TEXT,
@@ -10,7 +10,7 @@ CREATE TABLE users (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE games (
+CREATE TABLE IF NOT EXISTS games (
   id               SERIAL PRIMARY KEY,
   code             TEXT UNIQUE NOT NULL,
   white_id         INT REFERENCES users(id),
@@ -31,7 +31,7 @@ CREATE TABLE games (
   ended_at         TIMESTAMPTZ
 );
 
-CREATE TABLE moves (
+CREATE TABLE IF NOT EXISTS moves (
   id         SERIAL PRIMARY KEY,
   game_id    INT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   ply        INT NOT NULL,        -- 1-based half-move number
@@ -45,7 +45,7 @@ CREATE TABLE moves (
 
 -- analysis of the position after `ply` half-moves (ply 0 = start position).
 -- eval_cp is from White's point of view.
-CREATE TABLE analyses (
+CREATE TABLE IF NOT EXISTS analyses (
   id          SERIAL PRIMARY KEY,
   game_id     INT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   ply         INT NOT NULL,
@@ -60,7 +60,7 @@ CREATE TABLE analyses (
   UNIQUE (game_id, ply)
 );
 
-CREATE TABLE position_embeddings (
+CREATE TABLE IF NOT EXISTS position_embeddings (
   id         SERIAL PRIMARY KEY,
   game_id    INT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   ply        INT NOT NULL,
@@ -70,10 +70,10 @@ CREATE TABLE position_embeddings (
   result     TEXT,                -- filled in when the game finishes
   UNIQUE (game_id, ply)
 );
-CREATE INDEX position_embeddings_hnsw ON position_embeddings USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS position_embeddings_hnsw ON position_embeddings USING hnsw (embedding vector_cosine_ops);
 
 -- logistic-regression "who wins from here" model trained on stored positions + game results
-CREATE TABLE model_weights (
+CREATE TABLE IF NOT EXISTS model_weights (
   id          SERIAL PRIMARY KEY,
   trained_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   n_samples   INT NOT NULL,

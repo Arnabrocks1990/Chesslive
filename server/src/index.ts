@@ -8,7 +8,8 @@ import { Redis } from "ioredis";
 import { Server } from "socket.io";
 import * as auth from "./auth.js";
 import { askClaude } from "./claude.js";
-import { config } from "./config.js";
+import { assertProductionConfig, config } from "./config.js";
+import { ensureBaseSchema } from "./baseSchema.js";
 import { query } from "./db.js";
 import { GameError, GameManager } from "./games.js";
 import { buildReport } from "./report.js";
@@ -52,6 +53,9 @@ function authed(req: express.Request, res: express.Response): auth.User | null {
   if (!user) res.status(401).json({ error: "Not signed in" });
   return user;
 }
+
+// Render health check: confirms the process is up and the database answers.
+app.get("/healthz", wrap(async (_req, res) => { await query("SELECT 1"); res.json({ ok: true }); }));
 
 app.get("/api/me", wrap(async (req, res) => {
   const user = authed(req, res);
@@ -249,6 +253,19 @@ if (fs.existsSync(dist)) {
   // text/html) makes the browser silently refuse the script and leaves a blank page.
   app.use("/assets", express.static(path.join(dist, "assets"), { immutable: true, maxAge: "1y", fallthrough: false }));
   app.use("/assets", (_err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => res.status(404).type("text/plain").send("Not found"));
+  // The payment QR lives in the database (uploaded from the admin dashboard) so it never has to be committed
+  // to git. A file at client/public/payment-qr.png is still honoured as a fallback for local use.
+  app.get("/payment-qr.png", wrap(async (_req, res) => {
+    const rows = await query<{ key: string; value: string }>(`SELECT key, value FROM settings WHERE key IN ('qr_image','qr_type')`);
+    const img = rows.find((r) => r.key === "qr_image")?.value;
+    if (img) {
+      res.setHeader("Cache-Control", "no-cache");
+      return void res.type(rows.find((r) => r.key === "qr_type")?.value || "image/png").send(Buffer.from(img, "base64"));
+    }
+    const file = path.join(dist, "payment-qr.png");
+    if (fs.existsSync(file)) return void res.sendFile(file);
+    res.status(404).type("text/plain").send("No payment QR has been uploaded yet");
+  }));
   app.use(express.static(dist, { index: false }));
   app.get(/^\/(?!api|socket\.io).*/, (_req, res) => {
     res.setHeader("Cache-Control", "no-store");
@@ -256,6 +273,8 @@ if (fs.existsSync(dist)) {
   });
 }
 
+assertProductionConfig();
+await ensureBaseSchema();
 await ensureBillingSchema();
 await ensureCoachSchema();
 await ensureLearnerSchema();

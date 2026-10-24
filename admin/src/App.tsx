@@ -449,29 +449,64 @@ function Audit({ onAuth }: { onAuth: () => void }) {
 }
 
 function Settings({ onAuth }: { onAuth: () => void }) {
-  const { data } = useLoad<Record<string, string>>("/settings", [], 0, onAuth);
+  const { data, reload } = useLoad<any>("/settings", [], 0, onAuth);
   const [f, setF] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState("");
+  const [qr, setQr] = useState<string | null>(null);
+  const [qrMsg, setQrMsg] = useState("");
   useEffect(() => { if (data) setF(data); }, [data]);
   async function save(e: FormEvent) {
     e.preventDefault();
     setMsg("");
     try {
-      setF(await api("/settings", f));
+      const { qr_set, ...rest } = f as any;
+      void qr_set;
+      setF(await api("/settings", rest));
       setMsg("Saved. New checkouts use these values.");
     } catch (err: any) {
       setMsg(err.message);
     }
   }
+  function pick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    setQrMsg("");
+    if (!file) return setQr(null);
+    if (file.size > 600_000) return void (setQr(null), setQrMsg("That image is too large (limit about 600 KB)."));
+    const r = new FileReader();
+    r.onload = () => setQr(String(r.result));
+    r.readAsDataURL(file);
+  }
+  async function uploadQr() {
+    if (!qr) return;
+    setQrMsg("");
+    try {
+      await api("/settings/qr", { dataUrl: qr });
+      setQr(null);
+      setQrMsg("QR image saved. Players see it right away.");
+      reload();
+    } catch (err: any) {
+      setQrMsg(err.message);
+    }
+  }
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   return (
-    <form className="card settings" onSubmit={save}>
-      <label>Price per coach profile (₹, 30 days)<input type="number" min={1} value={f.price_inr ?? ""} onChange={set("price_inr")} /></label>
-      <label>UPI ID shown to payers<input value={f.upi_id ?? ""} onChange={set("upi_id")} /></label>
-      <label>Payee name<input value={f.payee_name ?? ""} onChange={set("payee_name")} /></label>
-      <p className="warn small">The QR picture players scan is a fixed image (<code>client/public/payment-qr.png</code>). If you change the UPI ID, replace that image with the new QR too, or players will pay the old account. Changing the price does not affect payments already started.</p>
-      <div className="row"><button className="primary">Save</button><span className="muted">{msg}</span></div>
-    </form>
+    <>
+      <form className="card settings" onSubmit={save}>
+        <label>Price per coach profile (₹, 30 days)<input type="number" min={1} value={f.price_inr ?? ""} onChange={set("price_inr")} /></label>
+        <label>UPI ID shown to payers<input value={f.upi_id ?? ""} onChange={set("upi_id")} /></label>
+        <label>Payee name<input value={f.payee_name ?? ""} onChange={set("payee_name")} /></label>
+        <p className="warn small">Changing the price does not affect payments already started. If you change the UPI ID, upload the matching QR image below, or players will scan the old account.</p>
+        <div className="row"><button className="primary">Save</button><span className="muted">{msg}</span></div>
+      </form>
+      <div className="card settings" style={{ marginTop: 16 }}>
+        <h4>Payment QR image</h4>
+        <p className="muted small">Status: {data?.qr_set ? "an image is stored in the database and shown to players" : "no image uploaded yet (the paywall will show a broken picture)"}.</p>
+        <input type="file" accept="image/png,image/jpeg" onChange={pick} />
+        {qr && <img src={qr} alt="QR preview" style={{ maxWidth: 220, marginTop: 12, borderRadius: 8, background: "#fff" }} />}
+        <div className="row"><button className="primary" disabled={!qr} onClick={uploadQr}>Upload QR</button><span className="muted">{qrMsg}</span></div>
+        <p className="muted small">PNG or JPEG, up to about 600 KB. It is stored in the database, not in git.</p>
+      </div>
+    </>
   );
 }
 

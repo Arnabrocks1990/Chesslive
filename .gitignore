@@ -15,3 +15,5 @@ server/.env
 
 # business plan kept private for now
 COMMERCIAL_PLAN.md
+!.env.example
+!server/.env.example

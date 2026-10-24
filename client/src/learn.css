@@ -1,0 +1,40 @@
+/* ---- learner mode ---- */
+.learn { max-width: 980px; margin: 24px auto; padding: 0 16px; display: grid; gap: 16px; }
+.row.between { justify-content: space-between; }
+.learnhead { display: grid; gap: 12px; }
+.learnhead h1 { margin: 0 0 4px; }
+.xpbar { display: grid; gap: 6px; }
+.bar { height: 8px; background: #12161a; border-radius: 99px; overflow: hidden; }
+.bar span { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent-2)); transition: width .3s; }
+.stars i { font-style: normal; color: var(--line); font-size: 18px; }
+.stars i.on { color: #e0b050; }
+.path { list-style: none; margin: 0; padding: 0; }
+.pnode { position: relative; padding: 0 0 16px 54px; }
+.pnode::before { content: ""; position: absolute; left: 19px; top: 40px; bottom: -2px; width: 3px; background: var(--line); }
+.pnode:last-child::before { display: none; }
+.pnode.done::before { background: var(--accent-2); }
+.pdot { position: absolute; left: 0; top: 0; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: #12161a; border: 3px solid var(--line); font-weight: 700; }
+.pnode.done .pdot { background: var(--accent); border-color: var(--accent-2); }
+.pnode.current .pdot { border-color: #e0b050; animation: cwpulse 1.8s infinite; }
+.pcard { background: #12161a; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; gap: 8px; }
+.pnode.locked .pcard { opacity: .5; }
+.pcard button { width: fit-content; }
+.lesson-grid { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.lesson-board { flex: 0 0 auto; }
+.lesson-side { flex: 1; min-width: 280px; display: grid; gap: 12px; align-content: start; }
+.task { color: #e0b050; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
+.options { display: grid; gap: 8px; }
+.options button { text-align: left; padding: 10px 12px; }
+.options button.right { background: #1c2a1c; border-color: var(--accent-2); }
+.options button.wrong { background: #2a1c1c; border-color: var(--danger); }
+.lmsg { padding: 10px 12px; border-radius: 8px; }
+.lmsg.ok { background: #1c2a1c; border: 1px solid var(--accent-2); }
+.lmsg.bad { background: #2a1c1c; border: 1px solid var(--danger); }
+.lmsg.tip { background: #2a2412; border: 1px solid #e0b05066; }
+.card.done { text-align: center; display: grid; gap: 10px; justify-items: center; }
+.card.done .xpbar { width: min(420px, 100%); }
+.learnbanner { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-color: var(--accent); grid-column: 1 / -1; }
+.learnbanner > div { flex: 1; min-width: 220px; }
+.learnbanner h2 { margin: 0 0 4px; }
+.badge.grad { background: #4a3a12; color: #e0b050; }
+.topnav a.learnlink { color: #e0b050; font-weight: 600; }

@@ -1,0 +1,4 @@
+chess==1.11.2
+redis==5.2.1
+psycopg[binary]==3.2.3
+numpy==2.1.3

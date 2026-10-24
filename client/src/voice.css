@@ -1,0 +1,7 @@
+/* ---- voiceover ---- */
+.voicetoggle { border-radius: 99px; padding: 5px 14px; color: var(--muted); }
+.voicetoggle.on { border-color: var(--accent-2); color: var(--text); }
+.voicetoggle em { font-style: normal; font-size: 11px; color: #e0b050; margin-left: 6px; }
+.listen { padding: 2px 10px; font-size: 12px; border-radius: 99px; color: var(--muted); margin-left: 6px; }
+.lesson .row.between { align-items: center; }
+.lesson .row.between h2 { margin: 0; }

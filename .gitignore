@@ -1,0 +1,17 @@
+node_modules/
+dist/
+worker/wheels/
+*.log
+
+.env
+data/
+
+# personal / local-only
+backups/
+client/public/payment-qr.png
+server/.env
+.env.*
+
+
+# business plan kept private for now
+COMMERCIAL_PLAN.md

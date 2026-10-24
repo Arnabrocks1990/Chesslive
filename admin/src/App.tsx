@@ -3,7 +3,9 @@ import { FormEvent, ReactNode, useCallback, useEffect, useState } from "react";
 // ---- api ------------------------------------------------------------------------------
 
 const KEY = "chess.admin.token";
-const getToken = () => localStorage.getItem(KEY);
+// Opened from the game site (same origin, /admin/): reuse its sign-in so an admin does not log in twice.
+// A non-admin token simply fails the admin API and lands on the sign-in form.
+const getToken = () => localStorage.getItem(KEY) || localStorage.getItem("chess.token");
 
 class AuthError extends Error {}
 
@@ -517,7 +519,7 @@ const TABS: [string, string][] = [["payments", "Payments"], ["overview", "Overvi
 export default function App() {
   const [authed, setAuthed] = useState(!!getToken());
   const [tab, setTab] = useState(() => localStorage.getItem("chess.admin.tab") || "payments");
-  const signOut = useCallback(() => { localStorage.removeItem(KEY); setAuthed(false); }, []);
+  const signOut = useCallback(() => { localStorage.removeItem(KEY); localStorage.removeItem("chess.token"); setAuthed(false); }, []);
   const { data: me } = useLoad<any>("/me", [authed], 0, signOut);
   const { data: pend } = useLoad<any[]>("/payments?status=pending", [authed], 10000, signOut);
   const pending = authed ? pend?.length ?? 0 : 0;

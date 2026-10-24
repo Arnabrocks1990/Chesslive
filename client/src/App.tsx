@@ -67,6 +67,22 @@ function AuthForm({ onDone }: { onDone: (u: User) => void }) {
   );
 }
 
+/** Admin only: registered-user count + pending payments, linking to the admin dashboard in a new tab. */
+function AdminLink() {
+  const [t, setT] = useState<{ users: number; games: number; pending_payments: number; revenue_inr: number } | null>(null);
+  useEffect(() => {
+    const load = () => api<{ totals: any }>("/admin/overview").then((r) => setT(r.totals)).catch(() => {});
+    load();
+    const id = setInterval(load, 30000);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <a href="/admin/" target="_blank" rel="noopener" className="coachlink" title={t ? `${t.users} registered users · ${t.games} games · ${t.pending_payments} payments awaiting review · ₹${t.revenue_inr.toLocaleString("en-IN")} confirmed` : "Admin dashboard"}>
+      🛡 Admin{t ? ` · ${t.users} users` : ""}{t && t.pending_payments > 0 ? ` · ${t.pending_payments} pending` : ""}
+    </a>
+  );
+}
+
 function Shell({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [checked, setChecked] = useState(false);
@@ -98,6 +114,7 @@ function Shell({ children }: { children: ReactNode }) {
           <NavLink to="/" end>Play</NavLink>
           <NavLink to="/learn" className="learnlink">🎓 Learn</NavLink>
           <NavLink to="/coach" className="coachlink">✦ AI Coach</NavLink>
+          {user.role === "admin" && <AdminLink />}
         </nav>
         <span className="who">
           <Link to={`/u/${encodeURIComponent(user.username)}`} className="link">{user.username}</Link>

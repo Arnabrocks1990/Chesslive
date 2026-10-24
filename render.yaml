@@ -5,8 +5,8 @@
 #   db       Postgres with the pgvector extension (applied by the server at boot from db/init.sql)
 #   redis    Key Value instance holding the analysis / bot job queues
 #
-# The admin dashboard is NOT deployed on purpose: it can confirm payments, so it only ever listens on
-# 127.0.0.1. You run it on your own computer against this database (see DEPLOY.md, step 5).
+# The admin dashboard is built into the web service and served at /admin/ (the game site links to it, for
+# admins only). Every admin API route requires an admin sign-in. It can still also be run locally (DEPLOY.md, step 5).
 #
 # Plans are left at Render's defaults so the Blueprint never names a plan that no longer exists.
 # Change them in the dashboard if you want something bigger or cheaper.
@@ -31,7 +31,7 @@ services:
     healthCheckPath: /healthz
     # Render sets NODE_ENV=production, which makes npm skip devDependencies; the build needs vite and the
     # server runs through tsx, so install them explicitly.
-    buildCommand: npm --prefix client ci --include=dev && npm --prefix client run build && npm --prefix server ci --include=dev
+    buildCommand: npm --prefix client ci --include=dev && npm --prefix client run build && npm --prefix server ci --include=dev && npm --prefix admin ci --include=dev && npm --prefix admin run build
     startCommand: npm --prefix server start
     envVars:
       - key: NODE_VERSION

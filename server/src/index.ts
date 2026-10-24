@@ -21,9 +21,14 @@ import { ensureLearnerSchema, learnerBadges, registerLearnerRoutes } from "./lea
 import { ensureBillingSchema } from "./billing/schema.js";
 import { registerBillingRoutes } from "./billing/routes.js";
 import { coachOwnerGate } from "./coach/access.js";
+import { adminRouter } from "./admin/router.js";
 
 const app = express();
 app.use(cors());
+app.set("trust proxy", 1); // behind Render's proxy: req.ip is the visitor (admin login rate limit)
+// The admin API takes its own (larger) JSON parser for the QR upload, so it is mounted before the default one.
+// Every route in it requires a signed-in admin (re-checked against the database).
+app.use("/api/admin", adminRouter);
 app.use(express.json());
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: "*" } });
@@ -271,6 +276,18 @@ if (fs.existsSync(dist)) {
     if (fs.existsSync(file)) return void res.sendFile(file);
     res.status(404).type("text/plain").send("No payment QR has been uploaded yet");
   }));
+  // The admin dashboard (same UI as the local one) at /admin/. The page is just a shell: it shows a sign-in form
+  // and every API call behind it requires an admin token. The game client only links to it for admins.
+  const adminDist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../admin/dist");
+  if (fs.existsSync(adminDist)) {
+    app.get(/^\/admin$/, (_req, res) => res.redirect(301, "/admin/")); // regex: a string route would also match /admin/ and loop
+    app.use("/admin/assets", express.static(path.join(adminDist, "assets"), { immutable: true, maxAge: "1y", fallthrough: false }));
+    app.use("/admin/assets", (_err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => res.status(404).type("text/plain").send("Not found"));
+    app.get(/^\/admin\/.*/, (_req, res) => {
+      res.setHeader("Cache-Control", "no-store");
+      res.sendFile(path.join(adminDist, "index.html"));
+    });
+  }
   app.use(express.static(dist, { index: false }));
   app.get(/^\/(?!api|socket\.io).*/, (_req, res) => {
     res.setHeader("Cache-Control", "no-store");

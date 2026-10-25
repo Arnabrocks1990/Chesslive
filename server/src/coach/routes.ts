@@ -106,7 +106,7 @@ export function registerCoachRoutes(app: Express, redis: Redis, authed: Authed, 
   app.get("/api/coach/players", guard(async (req, res) => {
     const user = authed(req, res)!;
     res.json(await query(`SELECT p.id, p.platform, p.username, p.created_at, u.username AS owner,
-      (SELECT COUNT(*) FROM games g WHERE g.player_id=p.id) games
+      (SELECT COUNT(*) FROM games g WHERE g.player_id=p.id) games, (p.revoked_at IS NOT NULL) AS revoked
       FROM players p LEFT JOIN users u ON u.id=p.owner_id
       WHERE ($1::boolean OR p.owner_id=$2) ORDER BY p.id DESC LIMIT 20`, [user.role === "admin", user.id]));
   }));
@@ -336,7 +336,7 @@ export function startPoller(redis: Redis) {
   if (every <= 0) return;
   setInterval(async () => {
     try {
-      const players = await query<any>(`SELECT * FROM players WHERE autopoll AND platform IN ('lichess','chesscom')
+      const players = await query<any>(`SELECT * FROM players WHERE autopoll AND revoked_at IS NULL AND platform IN ('lichess','chesscom')
         AND EXISTS (SELECT 1 FROM plans WHERE plans.player_id=players.id)`);
       for (const p of players) {
         if (isRunning(p.id)) continue;

@@ -56,6 +56,7 @@ const requireAdmin: express.RequestHandler = (req, res, next) => {
   query<{ role: string }>(`SELECT role FROM users WHERE id=$1`, [user.id]).then(([row]) => {
     if (row?.role !== "admin") return void res.status(401).json({ error: "Admin sign-in required" });
     (req as AdminReq).admin = { id: user.id, username: user.username };
+    auth.touchSeen(user.id);
     next();
   }, next);
 };
@@ -77,6 +78,9 @@ router.get("/overview", wrap(async (_req, res) => {
       (SELECT count(*) FROM users WHERE role = 'guest')::int AS guests,
       (SELECT count(*) FROM users WHERE role <> 'bot' AND created_at > now() - interval '7 days')::int AS new_users_7d,
       (SELECT count(*) FROM users WHERE last_seen_at > now() - interval '24 hours')::int AS active_24h,
+      (SELECT count(*) FROM users WHERE role <> 'bot' AND last_seen_at > now() - interval '3 minutes')::int AS online_now,
+      (SELECT count(*) FROM users WHERE role = 'guest' AND last_seen_at > now() - interval '3 minutes')::int AS online_guests,
+      (SELECT count(*) FROM users WHERE blocked_at IS NOT NULL)::int AS blocked_users,
       (SELECT count(*) FROM games)::int AS games,
       (SELECT count(*) FROM games WHERE status = 'active')::int AS active_games,
       (SELECT count(*) FROM games WHERE status = 'finished')::int AS finished_games,
@@ -105,16 +109,27 @@ router.get("/overview", wrap(async (_req, res) => {
     null
   );
   const [model] = await safe(query<any>(`SELECT n_samples, n_games, accuracy, trained_at FROM model_weights ORDER BY id DESC LIMIT 1`), []);
-  res.json({ totals: t, series, coach, model: model ?? null });
+  const online = await query(`SELECT id, username, role, last_seen_at FROM users WHERE role <> 'bot' AND last_seen_at > now() - interval '3 minutes' ORDER BY last_seen_at DESC LIMIT 100`);
+  res.json({ totals: t, series, coach, model: model ?? null, online });
 }));
 
 // ---- users --------------------------------------------------------------------
+
+// Engine work done for a user: positions Stockfish analysed in games they played, plus the coach's own runs
+// and the positions in the games it imported for their coach profiles.
+const ANALYSIS_SQL = `
+  (SELECT count(*) FROM analyses a JOIN games g ON g.id = a.game_id WHERE g.white_id = u.id OR g.black_id = u.id)::int AS positions_analysed,
+  (SELECT count(DISTINCT a.game_id) FROM analyses a JOIN games g ON g.id = a.game_id WHERE g.white_id = u.id OR g.black_id = u.id)::int AS games_analysed,
+  (SELECT count(*) FROM agent_runs r JOIN players p ON p.id = r.player_id WHERE p.owner_id = u.id)::int AS coach_runs,
+  (SELECT count(*) FROM analyses a JOIN games g ON g.id = a.game_id JOIN players p ON p.id = g.player_id WHERE p.owner_id = u.id)::int AS coach_positions`;
 
 router.get("/users", wrap(async (req, res) => {
   const q = String(req.query.q ?? "").trim().slice(0, 40);
   res.json(
     await query(
-      `SELECT u.id, u.username, u.role, u.rating, u.rated_games, u.created_at, u.last_seen_at,
+      `SELECT u.id, u.username, u.role, u.rating, u.rated_games, u.created_at, u.last_seen_at, u.blocked_at,
+              (u.last_seen_at > now() - interval '3 minutes') AS online,
+              ${ANALYSIS_SQL},
               (SELECT count(*) FROM games g WHERE g.white_id = u.id OR g.black_id = u.id)::int AS games,
               (SELECT max(g.created_at) FROM games g WHERE g.white_id = u.id OR g.black_id = u.id) AS last_game_at,
               (SELECT count(*) FROM payments p WHERE p.user_id = u.id AND p.status = 'confirmed')::int AS paid_count,
@@ -129,7 +144,9 @@ router.get("/users", wrap(async (req, res) => {
 
 router.get("/users/:id", wrap(async (req, res) => {
   const id = Number(req.params.id);
-  const [user] = await query<any>(`SELECT id, username, role, rating, rated_games, created_at, last_seen_at FROM users WHERE id=$1 AND role <> 'bot'`, [id]);
+  const [user] = await query<any>(`SELECT u.id, u.username, u.role, u.rating, u.rated_games, u.created_at, u.last_seen_at, u.blocked_at, u.blocked_reason,
+      (u.last_seen_at > now() - interval '3 minutes') AS online, ${ANALYSIS_SQL}
+    FROM users u WHERE u.id=$1 AND u.role <> 'bot'`, [id]);
   if (!user) throw new HttpError(404, "User not found");
   const games = await query(
     `SELECT g.code, g.status, g.result, g.termination, g.vs_bot, g.created_at,
@@ -143,7 +160,8 @@ router.get("/users/:id", wrap(async (req, res) => {
      FROM payments p LEFT JOIN players pl ON pl.id = p.player_id WHERE p.user_id = $1 ORDER BY p.id DESC`,
     [id]
   );
-  res.json({ user, games, payments });
+  const profiles = await safe(query(`SELECT id, platform, username, revoked_at, revoked_reason FROM players WHERE owner_id=$1 ORDER BY id`, [id]), []);
+  res.json({ user, games, payments, profiles });
 }));
 
 // ---- games ----------------------------------------------------------------------
@@ -167,7 +185,7 @@ router.get("/games", wrap(async (req, res) => {
 
 router.get("/coach", wrap(async (_req, res) => {
   const profiles = await safe(
-    query(`SELECT pl.id, pl.platform, pl.username, pl.goal, pl.created_at, pl.last_checked_at,
+    query(`SELECT pl.id, pl.platform, pl.username, pl.goal, pl.created_at, pl.last_checked_at, pl.revoked_at, pl.revoked_reason,
                   (SELECT u.username FROM users u WHERE u.id = pl.owner_id) AS owner,
                   (SELECT count(*) FROM games g WHERE g.player_id = pl.id)::int AS games,
                   (SELECT count(*) FROM agent_runs r WHERE r.player_id = pl.id)::int AS runs,
@@ -181,6 +199,50 @@ router.get("/coach", wrap(async (_req, res) => {
     []
   );
   res.json({ profiles, subscriptions });
+}));
+
+// ---- block / revoke ---------------------------------------------------------------------
+
+const audit = (adminId: number, action: string, type: string, id: number, detail: unknown) =>
+  query(`INSERT INTO admin_audit (admin_id, action, target_type, target_id, detail) VALUES ($1,$2,$3,$4,$5)`, [adminId, action, type, id, JSON.stringify(detail)]);
+
+/** Blocks sign-in and every API call for the account (the game server drops its connections within seconds). */
+router.post("/users/:id/block", wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const reason = noteOf(req);
+  if (id === me(req).id) throw new HttpError(400, "You cannot block your own account");
+  const [u] = await query<any>(`SELECT id, username, role, blocked_at FROM users WHERE id=$1`, [id]);
+  if (!u || u.role === "bot") throw new HttpError(404, "User not found");
+  if (u.role === "admin") throw new HttpError(400, "Admin accounts cannot be blocked");
+  await query(`UPDATE users SET blocked_at = COALESCE(blocked_at, now()), blocked_reason = $2 WHERE id=$1`, [id, reason || null]);
+  await audit(me(req).id, "user.block", "user", id, { username: u.username, reason: reason || null });
+  await auth.refreshBlocked();
+  res.json({ ok: true });
+}));
+router.post("/users/:id/unblock", wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const [u] = await query<any>(`UPDATE users SET blocked_at = NULL, blocked_reason = NULL WHERE id=$1 AND role <> 'bot' RETURNING username`, [id]);
+  if (!u) throw new HttpError(404, "User not found");
+  await audit(me(req).id, "user.unblock", "user", id, { username: u.username });
+  await auth.refreshBlocked();
+  res.json({ ok: true });
+}));
+
+/** Revokes one coach profile: its owner loses access to it and the agent stops polling it. */
+router.post("/coach/players/:id/revoke", wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const reason = noteOf(req);
+  const [p] = await query<any>(`UPDATE players SET revoked_at = COALESCE(revoked_at, now()), revoked_reason = $2 WHERE id=$1 RETURNING platform, username`, [id, reason || null]);
+  if (!p) throw new HttpError(404, "Profile not found");
+  await audit(me(req).id, "coach.revoke", "player", id, { profile: `${p.platform}:${p.username}`, reason: reason || null });
+  res.json({ ok: true });
+}));
+router.post("/coach/players/:id/restore", wrap(async (req, res) => {
+  const id = Number(req.params.id);
+  const [p] = await query<any>(`UPDATE players SET revoked_at = NULL, revoked_reason = NULL WHERE id=$1 RETURNING platform, username`, [id]);
+  if (!p) throw new HttpError(404, "Profile not found");
+  await audit(me(req).id, "coach.restore", "player", id, { profile: `${p.platform}:${p.username}` });
+  res.json({ ok: true });
 }));
 
 // ---- payments ---------------------------------------------------------------------

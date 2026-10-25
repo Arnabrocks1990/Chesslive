@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS: Record<string, string> = {
 export async function ensureBillingSchema() {
   const stmts = [
     `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_at TIMESTAMPTZ`,
+    `ALTER TABLE users ADD COLUMN IF NOT EXISTS blocked_reason TEXT`,
     `CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)`,
     `CREATE TABLE IF NOT EXISTS payments (
        id           SERIAL PRIMARY KEY,

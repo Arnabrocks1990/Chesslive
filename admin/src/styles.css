@@ -77,3 +77,8 @@ td.actions { display: flex; gap: 6px; }
 .facts { display: grid; grid-template-columns: 140px 1fr; gap: 6px 12px; margin: 12px 0; }
 .facts dt { color: var(--muted); } .facts dd { margin: 0; }
 .settings { max-width: 520px; }
+
+.onlinelist { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.blockbox { display: flex; gap: 8px; margin-bottom: 10px; } .blockbox input { flex: 1; }
+button.danger { background: #5a2f2d; border-color: #7a3a37; color: #ffb0ad; }
+ul.plain { list-style: none; padding: 0; margin: 4px 0; }

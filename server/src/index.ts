@@ -50,12 +50,12 @@ const wrap =
   (req: express.Request, res: express.Response) =>
     fn(req, res).catch((e) => {
       if (isDbUnavailable(e)) return void res.status(503).json({ error: "The server could not reach its database. Please try again in a moment." });
-      const status = e instanceof GameError || /taken|Invalid|must be/.test(e.message) ? 400 : 500;
+      const status = e instanceof GameError || /taken|Invalid|must be|blocked/.test(e.message) ? 400 : 500;
       if (status === 500) console.error(e);
       res.status(status).json({ error: status === 500 ? "Server error" : e.message });
     });
 
-const session = (u: auth.User) => ({ token: auth.signToken(u), user: u });
+const session = (u: auth.User) => { auth.touchSeen(u.id); return { token: auth.signToken(u), user: u }; };
 
 app.post("/api/register", wrap(async (req, res) => res.json(session(await auth.register(req.body.username, req.body.password)))));
 app.post("/api/login", wrap(async (req, res) => res.json(session(await auth.login(req.body.username, req.body.password)))));
@@ -64,6 +64,7 @@ app.post("/api/guest", wrap(async (req, res) => res.json(session(await auth.gues
 function authed(req: express.Request, res: express.Response): auth.User | null {
   const user = auth.verifyToken((req.headers.authorization || "").replace(/^Bearer /, ""));
   if (!user) res.status(401).json({ error: "Not signed in" });
+  else auth.touchSeen(user.id);
   return user;
 }
 
@@ -75,7 +76,6 @@ app.get("/api/me", wrap(async (req, res) => {
   if (!user) return;
   const [row] = await query<{ rating: number; rated_games: number }>(`SELECT rating, rated_games FROM users WHERE id=$1`, [user.id]);
   if (!row) return res.status(401).json({ error: "Not signed in" });
-  query(`UPDATE users SET last_seen_at=now() WHERE id=$1`, [user.id]).catch(() => {});
   res.json({ user, rating: row.rating, ratedGames: row.rated_games });
 }));
 
@@ -153,6 +153,16 @@ io.use((socket, next) => {
   socket.data.user = user;
   next();
 });
+
+// Presence heartbeat: everyone with an open socket counts as online. Blocked accounts are dropped within seconds.
+setInterval(() => {
+  for (const s of io.sockets.sockets.values()) if (s.data.user) auth.touchSeen(s.data.user.id, 25_000);
+}, 30_000).unref();
+async function dropBlocked() {
+  await auth.refreshBlocked(); // picks up blocks made from the separate local admin dashboard
+  for (const s of io.sockets.sockets.values()) if (s.data.user && auth.isBlocked(s.data.user.id)) { s.emit("blocked"); s.disconnect(true); }
+}
+setInterval(() => dropBlocked().catch(() => {}), 5_000).unref();
 
 type Ack = (r: { ok: boolean; error?: string }) => void;
 const safe = (ack: Ack | undefined, fn: () => Promise<unknown>) =>
@@ -316,6 +326,7 @@ await ensureLearnerSchema();
 await ensureImproveSchema();
 startPoller(redis);
 await auth.ensureAdmin();
+await auth.refreshBlocked();
 games.botId = await auth.ensureBot();
 await games.resumeActive();
 server.listen(config.port, () => console.log(`Chess server on http://localhost:${config.port}`));

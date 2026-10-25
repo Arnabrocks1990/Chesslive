@@ -27,6 +27,8 @@ export async function ensureCoachSchema() {
     `ALTER TABLE players DROP CONSTRAINT IF EXISTS players_platform_username_key`,
     `CREATE UNIQUE INDEX IF NOT EXISTS players_owner_platform_username ON players (owner_id, platform, username)`,
     VERIFY_DDL,
+    `ALTER TABLE players ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ`,
+    `ALTER TABLE players ADD COLUMN IF NOT EXISTS revoked_reason TEXT`,
     `UPDATE players SET owner_id = (SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1) WHERE owner_id IS NULL`,
     `CREATE TABLE IF NOT EXISTS mistakes (
        id SERIAL PRIMARY KEY,

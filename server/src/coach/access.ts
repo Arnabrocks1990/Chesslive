@@ -40,6 +40,10 @@ export const coachOwnerGate: RequestHandler = (req, res, next) => {
   (async () => {
     const pid = await resolve(Number(m![1]));
     if (pid === undefined || !(await ownsPlayer(user, pid))) return void res.status(404).json({ error: "Not found" });
+    if (user.role !== "admin") {
+      const [p] = await query<{ revoked_at: string | null }>(`SELECT revoked_at FROM players WHERE id=$1`, [pid]);
+      if (p?.revoked_at) return void res.status(403).json({ error: "An administrator has revoked access to this coach profile." });
+    }
     next();
   })().catch(next);
 };

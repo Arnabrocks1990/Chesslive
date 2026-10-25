@@ -248,10 +248,20 @@ function Overview({ onAuth, goto }: { onAuth: () => void; goto: (t: string) => v
       </div>
       <h3>Users</h3>
       <div className="stats">
+        <Stat label="Online now" value={t.online_now} sub={`${t.online_guests} guest${t.online_guests === 1 ? "" : "s"} · active in the last 3 min`} tone={t.online_now ? "good" : ""} />
         <Stat label="Total users" value={t.users} sub={`${t.guests} guests`} />
+        <Stat label="Blocked accounts" value={t.blocked_users} tone={t.blocked_users ? "warn" : ""} />
         <Stat label="New (7 days)" value={t.new_users_7d} />
         <Stat label="Active (24h)" value={t.active_24h} />
       </div>
+      {data.online?.length > 0 && (
+        <div className="card">
+          <b>Signed in now</b>
+          <div className="onlinelist">
+            {data.online.map((o: any) => <span key={o.id} className="pill confirmed" title={`${o.role} · last active ${fmt(o.last_seen_at)}`}>● {o.username}</span>)}
+          </div>
+        </div>
+      )}
       <h3>Games</h3>
       <div className="stats">
         <Stat label="Games" value={t.games} sub={`${t.finished_games} finished`} />
@@ -290,50 +300,80 @@ function Users({ onAuth }: { onAuth: () => void }) {
   const [q, setQ] = useState("");
   const [term, setTerm] = useState("");
   useEffect(() => { const id = setTimeout(() => setTerm(q), 250); return () => clearTimeout(id); }, [q]);
-  const { data, error } = useLoad<any[]>(`/users?q=${encodeURIComponent(term)}`, [], 0, onAuth);
+  const { data, error, reload } = useLoad<any[]>(`/users?q=${encodeURIComponent(term)}`, [], 15000, onAuth);
   const [open, setOpen] = useState<number | null>(null);
+  const online = (data ?? []).filter((u) => u.online).length;
   return (
     <>
       <input className="search" placeholder="Search username…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <p className="muted small">{online} online now · analyses = positions Stockfish evaluated in the user's games, plus the coach's work for their profiles</p>
       {error && <div className="error">{error}</div>}
       <div className="card tablewrap">
         <table>
-          <thead><tr><th>User</th><th>Role</th><th>Elo</th><th>Games</th><th>Paid</th><th>Joined</th><th>Last seen</th><th>Last game</th></tr></thead>
+          <thead><tr><th>User</th><th>Status</th><th>Role</th><th>Elo</th><th>Games</th><th>Analyses used</th><th>Paid</th><th>Joined</th><th>Last seen</th></tr></thead>
           <tbody>
             {(data ?? []).map((u) => (
               <tr key={u.id} className="click" onClick={() => setOpen(u.id)}>
                 <td><b>{u.username}</b><div className="muted small">#{u.id}</div></td>
+                <td>{u.blocked_at ? <span className="pill rejected">blocked</span> : u.online ? <span className="pill confirmed">● online</span> : <span className="muted small">offline</span>}</td>
                 <td>{u.role}</td>
                 <td>{u.rating}<div className="muted small">{u.rated_games} rated</div></td>
-                <td>{u.games}</td>
+                <td>{u.games}<div className="muted small">last {fmt(u.last_game_at)}</div></td>
+                <td><b>{(u.positions_analysed + u.coach_positions).toLocaleString()}</b><div className="muted small">{u.games_analysed} game{u.games_analysed === 1 ? "" : "s"} · {u.coach_runs} coach run{u.coach_runs === 1 ? "" : "s"}</div></td>
                 <td>{u.paid_count ? <>{inr(u.paid_inr)}</> : u.payment_status ? <Badge status={u.payment_status} /> : "–"}</td>
                 <td>{fmt(u.created_at)}</td>
                 <td>{fmt(u.last_seen_at)}</td>
-                <td>{fmt(u.last_game_at)}</td>
               </tr>
             ))}
-            {data && data.length === 0 && <tr><td colSpan={8} className="muted">No users found.</td></tr>}
+            {data && data.length === 0 && <tr><td colSpan={9} className="muted">No users found.</td></tr>}
           </tbody>
         </table>
       </div>
-      {open !== null && <UserDetail id={open} onClose={() => setOpen(null)} onAuth={onAuth} />}
+      {open !== null && <UserDetail id={open} onClose={() => { setOpen(null); reload(); }} onAuth={onAuth} />}
     </>
   );
 }
 
 function UserDetail({ id, onClose, onAuth }: { id: number; onClose: () => void; onAuth: () => void }) {
-  const { data, error } = useLoad<any>(`/users/${id}`, [], 0, onAuth);
+  const { data, error, reload } = useLoad<any>(`/users/${id}`, [], 0, onAuth);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const act = async (path: string, body: unknown = {}) => {
+    setBusy(true); setErr("");
+    try { await api(path, body); setReason(""); reload(); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
+  };
   return (
     <Modal title={data ? data.user.username : "User"} onClose={onClose}>
       {error && <div className="error">{error}</div>}
       {data && (
         <>
+          {data.user.blocked_at ? (
+            <div className="banner">⛔ Blocked since {fmt(data.user.blocked_at)}{data.user.blocked_reason ? `: ${data.user.blocked_reason}` : ""}. They cannot sign in and any open session was ended.
+              <div><button disabled={busy} onClick={() => act(`/users/${id}/unblock`)}>Unblock</button></div>
+            </div>
+          ) : data.user.role !== "admin" && (
+            <div className="blockbox">
+              <input placeholder="Reason (optional, kept in the audit log)" value={reason} onChange={(e) => setReason(e.target.value)} maxLength={300} />
+              <button className="danger" disabled={busy} onClick={() => { if (confirm(`Block ${data.user.username}? They will be signed out immediately and cannot sign in again until you unblock them.`)) act(`/users/${id}/block`, { note: reason }); }}>Block user</button>
+            </div>
+          )}
+          {err && <div className="error">{err}</div>}
           <dl className="facts">
+            <dt>Status</dt><dd>{data.user.blocked_at ? "blocked" : data.user.online ? "● online now" : "offline"}</dd>
+            <dt>Analyses used</dt><dd><b>{(data.user.positions_analysed + data.user.coach_positions).toLocaleString()}</b> positions · {data.user.games_analysed} game{data.user.games_analysed === 1 ? "" : "s"} analysed · {data.user.coach_runs} coach run{data.user.coach_runs === 1 ? "" : "s"} ({data.user.coach_positions.toLocaleString()} coach positions)</dd>
             <dt>Role</dt><dd>{data.user.role}</dd>
             <dt>Elo</dt><dd>{data.user.rating} ({data.user.rated_games} rated games)</dd>
             <dt>Joined</dt><dd>{fmt(data.user.created_at)}</dd>
             <dt>Last seen</dt><dd>{fmt(data.user.last_seen_at)}</dd>
           </dl>
+          {data.profiles?.length > 0 && (
+            <>
+              <h4>Coach profiles</h4>
+              <ul className="plain">{data.profiles.map((p: any) => <li key={p.id}>{p.platform}: <b>{p.username}</b> {p.revoked_at && <span className="pill rejected">revoked</span>}</li>)}</ul>
+              <p className="muted small">Revoke or restore a profile in the Coach tab.</p>
+            </>
+          )}
           <h4>Payments</h4>
           {data.payments.length === 0 ? <p className="muted">None.</p> : (
             <table><thead><tr><th>Status</th><th>For</th><th>Amount</th><th>Reference</th><th>UTR</th><th>When</th></tr></thead><tbody>
@@ -393,20 +433,29 @@ function Games({ onAuth }: { onAuth: () => void }) {
 }
 
 function Coach({ onAuth }: { onAuth: () => void }) {
-  const { data, error } = useLoad<any>("/coach", [], 15000, onAuth);
+  const { data, error, reload } = useLoad<any>("/coach", [], 15000, onAuth);
+  const [err, setErr] = useState("");
+  const revoke = async (p: any) => {
+    const note = prompt(`Revoke ${p.platform}:${p.username}? The owner loses access and the coach stops updating it. Reason:`);
+    if (note === null) return;
+    try { await api(`/coach/players/${p.id}/revoke`, { note }); reload(); } catch (e: any) { setErr(e.message); }
+  };
+  const restore = async (p: any) => { try { await api(`/coach/players/${p.id}/restore`, {}); reload(); } catch (e: any) { setErr(e.message); } };
   if (error) return <div className="error">{error}</div>;
   if (!data) return <p className="muted">Loading…</p>;
   return (
     <>
+      {err && <div className="error">{err}</div>}
       <h3>Coach profiles</h3>
       <div className="card tablewrap">
         <table>
-          <thead><tr><th>Profile</th><th>Owner</th><th>Goal</th><th>Games</th><th>Agent runs</th><th>Access</th><th>Added</th><th>Last checked</th></tr></thead>
+          <thead><tr><th>Profile</th><th>Owner</th><th>Goal</th><th>Games</th><th>Agent runs</th><th>Access</th><th>Added</th><th>Last checked</th><th></th></tr></thead>
           <tbody>
             {data.profiles.map((p: any) => (
-              <tr key={p.id}><td>{p.platform}: <b>{p.username}</b><div className="muted small">#{p.id}</div></td><td>{p.owner ?? <span className="muted">none</span>}</td><td>{p.goal ?? "–"}</td><td>{p.games}</td><td>{p.runs}</td><td>{p.pro ? <span className="pill confirmed">Pro</span> : <span className="pill created">free (Days 1–2)</span>}</td><td>{fmt(p.created_at)}</td><td>{fmt(p.last_checked_at)}</td></tr>
+              <tr key={p.id}><td>{p.platform}: <b>{p.username}</b><div className="muted small">#{p.id}</div></td><td>{p.owner ?? <span className="muted">none</span>}</td><td>{p.goal ?? "–"}</td><td>{p.games}</td><td>{p.runs}</td><td>{p.pro ? <span className="pill confirmed">Pro</span> : <span className="pill created">free (Days 1–2)</span>}</td><td>{fmt(p.created_at)}</td><td>{fmt(p.last_checked_at)}</td>
+                <td>{p.revoked_at ? <><span className="pill rejected" title={p.revoked_reason ?? ""}>revoked</span> <button onClick={() => restore(p)}>Restore</button></> : <button className="danger" onClick={() => revoke(p)}>Revoke</button>}</td></tr>
             ))}
-            {data.profiles.length === 0 && <tr><td colSpan={8} className="muted">No coach profiles.</td></tr>}
+            {data.profiles.length === 0 && <tr><td colSpan={9} className="muted">No coach profiles.</td></tr>}
           </tbody>
         </table>
       </div>

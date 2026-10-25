@@ -35,6 +35,8 @@ Admin login: `admin` / `admin123` (override with `ADMIN_USERNAME`, `ADMIN_PASSWO
 - Live AI assistance (top-3 moves, eval, arrows, Claude explanation, similar past positions) is sent **only to admin sockets**. Everyone else plays without it; the server never emits suggestions to non-admins.
 - When a game ends, every position is analysed by the worker and a report (accuracy, mistakes, blunders) is available to all players.
 - Every game, move, analysis and position embedding is stored in Postgres; similar-position retrieval uses pgvector.
+- Improve your Game (/improve): puzzles built from the player's last five finished games (positions where Stockfish found a clearly better move), topped up with 12 verified built-in puzzles for new players. Hints are the coach's three progressive hints. Personal dashboard (/dashboard): record, rating trend, accuracy, mistakes by phase and habit, puzzle progress, and an AI Coach recommendation when the numbers call for it.
+- Matchmaking: "Find a random opponent" pairs players with the same time control and a similar Elo; the allowed gap widens while waiting.
 - Elo ratings: every new user starts at 600 (accounts created before that keep their rating). K=32 for the first 30 rated games, then 20. Games under 4 plies are unrated. Bot games are rated for the human against the bot's nominal strength (1400/1800/2300, max = 3200); the bot itself is never rated. Leaderboard in the lobby, rating on profiles and next to player names. Games finished before this feature were not rated retroactively.
 - Play against the Stockfish bot (easy ~1400 / medium ~1800 / hard ~2300 / max) from the lobby.
 - Profiles at `/u/<username>`: record, accuracy, blunder rate, openings, recent games.

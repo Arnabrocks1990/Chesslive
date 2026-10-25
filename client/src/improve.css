@@ -1,0 +1,28 @@
+/* Improve your Game + personal dashboard */
+.topnav a.improvelink { color: #7fb4e8; font-weight: 600; }
+.improve { max-width: 960px; margin: 0 auto; padding: 16px; display: grid; gap: 14px; }
+.improve h1 { margin: 0; }
+.improve .btn { display: inline-block; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line); color: var(--text); text-decoration: none; width: fit-content; }
+.improve .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.progresscard { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.bar { flex: 1; min-width: 120px; height: 10px; background: var(--line); border-radius: 6px; overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--accent-2); }
+.bar > span.warn { background: #d9a441; }
+.puzzles { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.puzzles li a { display: grid; grid-template-columns: 28px 1fr auto; gap: 10px; align-items: center; padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--text); text-decoration: none; }
+.puzzles li.solved .mark { color: var(--accent-2); } .puzzles li.revealed .mark { color: var(--muted); } .puzzles li.new .mark { color: #7fb4e8; }
+.ptitle { display: grid; gap: 2px; }
+.statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.stat { display: grid; gap: 4px; } .stat b { font-size: 24px; }
+.stat .up { color: var(--accent-2); } .stat .down { color: var(--danger); }
+.coachrec.strong { border-color: #d9a441; background: #2a2412; } .coachrec.suggested { border-color: var(--accent); }
+.insights { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.insights li { display: grid; grid-template-columns: 24px 1fr; gap: 8px; }
+.improve .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.spark { width: 100%; height: 80px; color: var(--accent-2); }
+.barrow { display: grid; grid-template-columns: 110px 1fr 36px; gap: 8px; align-items: center; margin: 6px 0; }
+.gamebars { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+.gamebars a { flex: 1; max-width: 28px; height: 100%; display: flex; align-items: flex-end; }
+.gamebars a span { display: block; width: 100%; background: #6b7686; border-radius: 3px 3px 0 0; }
+.gamebars a.win span { background: var(--accent-2); } .gamebars a.loss span { background: var(--danger); }
+@media (max-width: 600px) { .puzzles li a { grid-template-columns: 24px 1fr; } .puzzles li a > :last-child { grid-column: 2; } }

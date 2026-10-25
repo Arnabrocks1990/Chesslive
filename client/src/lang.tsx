@@ -100,7 +100,7 @@ export function VerdictBody({ v }: { v: any }) {
   ) : (
     <>
       <div>Coach move: <b>{v.bestSan}</b>{v.pv ? <span className="muted"> · {v.pv}</span> : null}</div>
-      {!v.pass && <div className="muted">In the game you played {v.youPlayedInGame}.</div>}
+      {!v.pass && v.youPlayedInGame && <div className="muted">In the game you played {v.youPlayedInGame}.</div>}
       {v.explanation && <div className="explain">{coachify(v.explanation)}</div>}
     </>
   );

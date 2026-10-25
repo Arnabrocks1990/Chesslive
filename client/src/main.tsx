@@ -6,6 +6,7 @@ import "./styles.css";
 import "./timeline.css";
 import "./learn.css";
 import "./voice.css";
+import "./improve.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

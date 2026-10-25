@@ -23,6 +23,7 @@ import { registerBillingRoutes } from "./billing/routes.js";
 import { coachOwnerGate } from "./coach/access.js";
 import { adminRouter } from "./admin/router.js";
 import { Matchmaker } from "./matchmaker.js";
+import { ensureImproveSchema, registerImproveRoutes } from "./improve/index.js";
 
 const app = express();
 app.use(cors());
@@ -140,6 +141,7 @@ app.get("/api/games/:code/pgn", wrap(async (req, res) => {
 registerLearnerRoutes(app, (req, res) => authed(req, res));
 registerBillingRoutes(app, (req, res) => authed(req, res));
 registerTtsRoutes(app, (req, res) => authed(req, res));
+registerImproveRoutes(app, (req, res) => authed(req, res));
 app.use("/api/coach", coachOwnerGate); // profile data is private to its owner (and admins)
 registerCoachRoutes(app, redis, (req, res) => authed(req, res), (user) => games.create(user, { color: "random", minutes: 15, increment: 10, vsBot: true, level: "medium" }));
 
@@ -311,6 +313,7 @@ await ensureBaseSchema();
 await ensureBillingSchema();
 await ensureCoachSchema();
 await ensureLearnerSchema();
+await ensureImproveSchema();
 startPoller(redis);
 await auth.ensureAdmin();
 games.botId = await auth.ensureBot();

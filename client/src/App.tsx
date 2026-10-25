@@ -10,6 +10,8 @@ import { LangProvider } from "./lang";
 import { VoiceProvider } from "./voice";
 import { MODES, modeOf, tcLabel } from "./timeMode";
 import { LearnHome, LearnerMe, LessonPlayer, XpBar } from "./LearnPage";
+import { ImproveHome, ImprovePuzzle } from "./ImprovePage";
+import DashboardPage from "./DashboardPage";
 
 interface AuthCtx { user: User; logout: () => void }
 const Auth = createContext<AuthCtx>(null as unknown as AuthCtx);
@@ -113,6 +115,8 @@ function Shell({ children }: { children: ReactNode }) {
           <Link to="/" className="brand">♞ Chess Live</Link>
           <NavLink to="/" end>Play</NavLink>
           <NavLink to="/learn" className="learnlink">🎓 Learn</NavLink>
+          <NavLink to="/improve" className="improvelink">🧩 Improve your Game</NavLink>
+          <NavLink to="/dashboard">📊 My Dashboard</NavLink>
           <NavLink to="/coach" className="coachlink">✦ AI Coach</NavLink>
           {user.role === "admin" && <AdminLink />}
         </nav>
@@ -357,6 +361,9 @@ export default function App() {
               <Route path="/u/:username" element={<ProfilePage />} />
               <Route path="/learn" element={<LearnHome />} />
               <Route path="/learn/:key" element={<LessonPlayer />} />
+              <Route path="/improve" element={<ImproveHome />} />
+              <Route path="/improve/:id" element={<ImprovePuzzle />} />
+              <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/coach" element={<CoachHome />} />
               <Route path="/coach/:id" element={<CoachPlayer />} />
               <Route path="/coach/:id/day/:sid" element={<CoachSession />} />

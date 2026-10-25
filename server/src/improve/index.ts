@@ -304,7 +304,7 @@ export async function dashboard(user: User) {
   // ---- insights + recommendation (plain rules over the numbers above, nothing invented)
   const insights: { tone: "good" | "warn" | "tip"; text: string }[] = [];
   const winRate = rec.games ? Math.round((rec.wins / rec.games) * 100) : null;
-  if (!rec.games) insights.push({ tone: "tip", text: "Play your first game to start building your dashboard. Finished games are analysed by Stockfish within a minute or two." });
+  if (!rec.games) insights.push({ tone: "tip", text: "Play your first game to start building your dashboard. Finished games are analyzed within a minute or two." });
   else if (!analysed) insights.push({ tone: "tip", text: "Your games are still being analysed. Check back in a minute for accuracy and mistake insights." });
   if (accuracy !== null) insights.push({ tone: accuracy >= 80 ? "good" : accuracy >= 65 ? "tip" : "warn", text: `Your average accuracy over the last ${analysed} analysed game${analysed > 1 ? "s" : ""} is ${accuracy}%.` });
   if (analysed) {

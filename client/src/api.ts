@@ -40,7 +40,7 @@ export async function api<T = any>(path: string, body?: unknown): Promise<T> {
       }
       if (res.status === 503 && i < tries - 1) { await sleep(700 * (i + 1)); continue; }
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+      if (!res.ok) throw Object.assign(new Error(data.error || `Request failed (${res.status})`), { data }); // callers can read extra fields (e.g. verification code)
       return data;
     } catch (e: any) {
       clearTimeout(timer);

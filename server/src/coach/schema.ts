@@ -1,4 +1,5 @@
 import { query } from "../db.js";
+import { VERIFY_DDL } from "./verify.js";
 
 // Idempotent: runs on every boot so existing databases pick up the coach tables without a volume reset.
 export async function ensureCoachSchema() {
@@ -25,6 +26,7 @@ export async function ensureCoachSchema() {
     `ALTER TABLE players ADD COLUMN IF NOT EXISTS owner_id INT REFERENCES users(id)`,
     `ALTER TABLE players DROP CONSTRAINT IF EXISTS players_platform_username_key`,
     `CREATE UNIQUE INDEX IF NOT EXISTS players_owner_platform_username ON players (owner_id, platform, username)`,
+    VERIFY_DDL,
     `UPDATE players SET owner_id = (SELECT id FROM users WHERE role='admin' ORDER BY id LIMIT 1) WHERE owner_id IS NULL`,
     `CREATE TABLE IF NOT EXISTS mistakes (
        id SERIAL PRIMARY KEY,

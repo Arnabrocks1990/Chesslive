@@ -8,6 +8,7 @@ import { config } from "../config.js";
 import { evaluateProgress, isRunning, rankWeaknesses, startRun } from "./agent.js";
 import { fetchChessCom, fetchLichess, parseGame, splitPgns, storeGame } from "./importer.js";
 import { SAMPLE_GAMES } from "./samples.js";
+import { FIELD, isVerified } from "./verify.js";
 import { hintFor, loadMistake, verdictExtras } from "./hints.js";
 import { accessFor, activateSubscription, answerQuestion, listSessions, resolvePlay, sessionView, startSession } from "./sessions.js";
 import { THEME_LABEL } from "./tagger.js";
@@ -78,9 +79,21 @@ export function registerCoachRoutes(app: Express, redis: Redis, authed: Authed, 
     if (platform !== "lichess" && platform !== "chesscom") throw new Error("Platform must be lichess, chesscom or pgn");
     const username = String(req.body.username || "").trim();
     if (!/^[A-Za-z0-9_-]{2,30}$/.test(username)) throw new Error("Enter a valid username");
-    // Verify the account exists before creating anything.
+    // The account must exist AND belong to the person asking: they prove it by putting their code in the public
+    // profile. Admins are exempt (they review other people's accounts on purpose).
+    const user = authed(req, res)!;
     const probe = platform === "lichess" ? await fetchLichess(username, 1) : await fetchChessCom(username, 1);
     void probe;
+    if (user.role !== "admin") {
+      const v = await isVerified(user.id, platform, username);
+      if (!v.ok) {
+        const f = FIELD[platform];
+        return void res.status(403).json({
+          needsVerification: true, code: v.code, field: f.name, settingsUrl: f.url, platform, username,
+          error: `Add ${v.code} to your ${platform === "lichess" ? "Lichess" : "Chess.com"} ${f.name} so we can confirm this account is yours, then try again.`,
+        });
+      }
+    }
     const [p] = await query<{ id: number }>(
       `INSERT INTO players (platform, username, goal, share_token, owner_id) VALUES ($1,$2,$3,$4,$5)
        ON CONFLICT (owner_id, platform, username) DO UPDATE SET goal=COALESCE(EXCLUDED.goal, players.goal) RETURNING id`,

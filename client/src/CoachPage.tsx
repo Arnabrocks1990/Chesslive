@@ -314,6 +314,8 @@ export function CoachHome() {
   const [color, setColor] = useState("white");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [verify, setVerify] = useState<{ code: string; field: string; settingsUrl: string; platform: string; username: string } | null>(null);
+  const [copied, setCopied] = useState(false);
   const [players, setPlayers] = useState<{ id: number; platform: string; username: string; games: string }[]>([]);
   useEffect(() => { api<typeof players>("/coach/players").then(setPlayers).catch(() => {}); }, []);
 
@@ -324,7 +326,11 @@ export function CoachHome() {
       const body = mode === "pgn" ? { platform: "pgn", pgn, color, goal } : { platform: mode, username, goal };
       const r = await api<{ playerId: number }>("/coach/players", body);
       nav(`/coach/${r.playerId}`);
-    } catch (err: any) { setError(err.message); } finally { setBusy(false); }
+    } catch (err: any) {
+      // The account exists but we have not yet seen the user's code in its public profile.
+      if (err.data?.needsVerification) { setVerify(err.data); setError(verify && verify.username === err.data.username ? "We could not see the code on your profile yet. Save it there, wait a few seconds, and try again." : ""); }
+      else { setVerify(null); setError(err.message); }
+    } finally { setBusy(false); }
   }
   return (
     <main className="coach">
@@ -344,7 +350,7 @@ export function CoachHome() {
           {(["lichess", "chesscom", "pgn"] as const).map((m) => <button type="button" key={m} className={mode === m ? "active" : ""} onClick={() => setMode(m)}>{m === "lichess" ? "Lichess" : m === "chesscom" ? "Chess.com" : "Paste PGN"}</button>)}
         </div>
         {mode !== "pgn" ? (
-          <label>Your {mode === "lichess" ? "Lichess" : "Chess.com"} username<input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. your_username" required /></label>
+          <label>Your {mode === "lichess" ? "Lichess" : "Chess.com"} username<input value={username} onChange={(e) => { setUsername(e.target.value); setVerify(null); }} placeholder="e.g. your_username" required /></label>
         ) : (
           <>
             <label>PGN of your finished games<textarea rows={6} value={pgn} onChange={(e) => setPgn(e.target.value)} placeholder="Paste one or more PGNs" required /></label>
@@ -352,9 +358,20 @@ export function CoachHome() {
           </>
         )}
         <label>Your goal (optional)<input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="e.g. reach 1400 in 8 weeks" /></label>
-        <button className="primary" disabled={busy}>{busy ? "Checking account…" : "Analyse my games"}</button>
+        {mode !== "pgn" && verify && verify.platform === mode && verify.username.toLowerCase() === username.trim().toLowerCase() && (
+          <div className="verifybox">
+            <b>Confirm this account is yours</b>
+            <p>Add this code to the <b>{verify.field}</b> on your {mode === "lichess" ? "Lichess" : "Chess.com"} profile, save it, then press the button below. You can remove the code afterwards.</p>
+            <div className="codeline">
+              <code>{verify.code}</code>
+              <button type="button" onClick={() => { navigator.clipboard?.writeText(verify.code).then(() => setCopied(true)).catch(() => {}); }}>{copied ? "Copied" : "Copy"}</button>
+              <a href={verify.settingsUrl} target="_blank" rel="noopener noreferrer">Open my {mode === "lichess" ? "Lichess" : "Chess.com"} profile settings ↗</a>
+            </div>
+          </div>
+        )}
+        <button className="primary" disabled={busy}>{busy ? "Checking account…" : verify && mode !== "pgn" ? "I've added the code. Verify and analyse" : "Analyse my games"}</button>
         {error && <div className="error">{error}</div>}
-        <div className="muted small">Only your own finished, public games are analysed. No live-game assistance. You can delete your data any time.</div>
+        <div className="muted small">Only your own finished, public games are analysed, and we check the account is yours with a short code in your public profile (no password needed). Pasted PGNs need no check. No live-game assistance. You can delete your data any time.</div>
       </form>
       {players.length > 0 && (
         <section className="card">

@@ -26,3 +26,8 @@
 .gamebars a span { display: block; width: 100%; background: #6b7686; border-radius: 3px 3px 0 0; }
 .gamebars a.win span { background: var(--accent-2); } .gamebars a.loss span { background: var(--danger); }
 @media (max-width: 600px) { .puzzles li a { grid-template-columns: 24px 1fr; } .puzzles li a > :last-child { grid-column: 2; } }
+
+.verifybox { border: 1px dashed #d9a441; background: #2a2412; border-radius: 8px; padding: 12px; display: grid; gap: 8px; }
+.verifybox p { margin: 0; }
+.verifybox .codeline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.verifybox code { font-size: 18px; letter-spacing: 1px; padding: 4px 10px; background: #161a1f; border-radius: 6px; user-select: all; }

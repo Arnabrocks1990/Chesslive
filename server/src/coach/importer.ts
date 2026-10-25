@@ -24,11 +24,14 @@ async function fetchRetry(url: string | URL, init: RequestInit, tries = 3): Prom
   throw new Error(`Network error reaching ${new URL(String(url)).host}: ${(last as any)?.cause?.code || (last as Error).message}`);
 }
 
+const LICHESS = process.env.LICHESS_BASE || "https://lichess.org"; // overridable for tests only
+const CHESSCOM = process.env.CHESSCOM_BASE || "https://api.chess.com";
+
 const UA = `ChessCoach/0.1 (hackathon prototype${process.env.CONTACT_EMAIL ? `; contact ${process.env.CONTACT_EMAIL}` : ""})`;
 
 /** Lichess: public NDJSON export of the user's finished games. */
 export async function fetchLichess(username: string, max: number, since?: Date | null): Promise<ImportedGame[]> {
-  const url = new URL(`https://lichess.org/api/games/user/${encodeURIComponent(username)}`);
+  const url = new URL(`${LICHESS}/api/games/user/${encodeURIComponent(username)}`);
   url.searchParams.set("max", String(max));
   url.searchParams.set("moves", "true");
   url.searchParams.set("clocks", "true");
@@ -66,7 +69,7 @@ export async function fetchLichess(username: string, max: number, since?: Date |
 
 /** Chess.com: monthly archives, newest first, until `max` games are collected. */
 export async function fetchChessCom(username: string, max: number, since?: Date | null): Promise<ImportedGame[]> {
-  const base = `https://api.chess.com/pub/player/${encodeURIComponent(username.toLowerCase())}`;
+  const base = `${CHESSCOM}/pub/player/${encodeURIComponent(username.toLowerCase())}`;
   const get = async (u: string) => {
     const r = await fetchRetry(u, { headers: { "user-agent": UA, accept: "application/json" }, signal: AbortSignal.timeout(30_000) });
     if (r.status === 404) throw new Error(`Chess.com user "${username}" not found`);

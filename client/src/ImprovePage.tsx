@@ -11,6 +11,53 @@ interface PuzzleRow {
 }
 interface PuzzleSet { puzzles: PuzzleRow[]; fromGames: number; gamesConsidered: number; usingDefaults: boolean; solved: number }
 
+export interface Streak { current: number; best: number; goal: number; goalReached: boolean; doneToday: boolean; totalSolved: number; last5: { date: string; done: boolean; today: boolean }[] }
+interface Daily { date: string; puzzle: { id: number; title: string; status: "new" | "solved" | "revealed"; hintsUsed: number; turn: "w" | "b" }; streak: Streak }
+
+const dow = (d: string) => new Date(d + "T00:00:00Z").toLocaleDateString([], { weekday: "short", timeZone: "UTC" });
+
+/** The last five days as flames: filled = that day's puzzle was solved. */
+export function StreakDots({ s }: { s: Streak }) {
+  return (
+    <div className="streakdots" aria-label={`${s.current} day streak`}>
+      {s.last5.map((d) => (
+        <div key={d.date} className={`sd ${d.done ? "done" : ""} ${d.today ? "today" : ""}`} title={d.date}>
+          <span>{d.done ? "🔥" : d.today ? "?" : "·"}</span>
+          <small>{d.today ? "Today" : dow(d.date)}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function streakLine(s: Streak) {
+  if (s.goalReached) return `🔥 ${s.current}-day streak. The ${s.goal}-day goal is done!`;
+  if (s.current > 0) return `🔥 ${s.current}-day streak. ${s.goal - s.current} more day${s.goal - s.current === 1 ? "" : "s"} for the ${s.goal}-day badge.`;
+  return `Solve today's puzzle to start a ${s.goal}-day streak.`;
+}
+
+/** Daily puzzle call-to-action with the streak; shown in the lobby and on the Improve page. */
+export function DailyCard() {
+  const nav = useNavigate();
+  const [d, setD] = useState<Daily | null>(null);
+  useEffect(() => { api<Daily>("/improve/daily").then(setD).catch(() => {}); }, []);
+  if (!d) return null;
+  const done = d.puzzle.status === "solved";
+  return (
+    <section className={`card dailycard ${done ? "done" : ""}`}>
+      <div>
+        <h2>{done ? "✅ Daily puzzle solved" : "🧩 Daily puzzle"}</h2>
+        <p className="muted">{done ? "Come back tomorrow for a new one to keep your streak." : `${d.puzzle.turn === "w" ? "White" : "Black"} to move. Hints are free. Solve it to keep your streak alive.`}</p>
+        <p className="streakline">{streakLine(d.streak)}</p>
+      </div>
+      <div className="dailyright">
+        <StreakDots s={d.streak} />
+        <button className="primary" onClick={() => nav(`/improve/${d.puzzle.id}`)}>{done ? "Review" : d.puzzle.status === "revealed" ? "Try again" : "Solve it"}</button>
+      </div>
+    </section>
+  );
+}
+
 const MARK = { new: "●", solved: "✓", revealed: "○" } as const;
 const day = (d: string) => new Date(d).toLocaleDateString([], { dateStyle: "medium" });
 
@@ -34,6 +81,7 @@ export function ImproveHome() {
           : "Practice puzzles to start with. Once you have played a few games, this page fills with positions from your own games."}
       </p>
       {set.fromGames > 0 && set.usingDefaults && <p className="muted small">A few practice puzzles are mixed in because your games gave fewer than six.</p>}
+      <DailyCard />
       <div className="card progresscard">
         <b>{set.solved} of {total} solved</b>
         <div className="bar"><span style={{ width: `${total ? (set.solved / total) * 100 : 0}%` }} /></div>
@@ -54,7 +102,7 @@ export function ImproveHome() {
   );
 }
 
-interface PuzzleView { id: number; source: string; title: string; fen: string; turn: "w" | "b"; status: string; hintsUsed: number; context: string; gameCode: string | null }
+interface PuzzleView { daily?: boolean; id: number; source: string; title: string; fen: string; turn: "w" | "b"; status: string; hintsUsed: number; context: string; gameCode: string | null }
 
 export function ImprovePuzzle() {
   const { id } = useParams();
@@ -66,6 +114,7 @@ export function ImprovePuzzle() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [hl, setHl] = useState<Hint["highlight"] | null>(null);
+  const [streak, setStreak] = useState<Streak | null>(null);
 
   const load = useCallback(async () => {
     const d = await api<PuzzleView>(`/improve/puzzles/${id}`);
@@ -84,7 +133,7 @@ export function ImprovePuzzle() {
     setFen(c.fen()); setBusy(true); setMsg(""); setErr("");
     api<any>(`/improve/puzzles/${p.id}/answer`, { uci: mv.from + mv.to + (mv.promotion ?? "") })
       .then((r) => {
-        if (r.correct) { setVerdict(r.verdict); setMsg(r.alternative ? "Also a strong move. The engine rates it about the same as the main line." : ""); }
+        if (r.correct) { setVerdict(r.verdict); if (r.streak) setStreak(r.streak); setMsg(r.alternative ? "Also a strong move. The engine rates it about the same as the main line." : ""); }
         else { setFen(p.fen); setMsg("Not the best move here. Look again, or ask for a hint."); }
       })
       .catch((e) => { setFen(p.fen); setErr(`${e.message} Your move was not recorded. Try again.`); })
@@ -97,6 +146,7 @@ export function ImprovePuzzle() {
     try { setVerdict((await api<any>(`/improve/puzzles/${p.id}/reveal`, {})).verdict); } catch (e: any) { setErr(e.message); } finally { setBusy(false); }
   };
   const goNext = async () => {
+    if (p?.daily) return nav("/improve");
     const set = await api<PuzzleSet>("/improve/puzzles");
     const nxt = set.puzzles.find((x) => x.status === "new" && x.id !== p?.id);
     nav(nxt ? `/improve/${nxt.id}` : "/improve");
@@ -124,8 +174,15 @@ export function ImprovePuzzle() {
               {verdict.pass && verdict.hintsUsed > 0 && <span className="muted small"> · used {verdict.hintsUsed} hint{verdict.hintsUsed > 1 ? "s" : ""}</span>}
               {msg && <div className="muted small">{msg}</div>}
               <VerdictBody v={verdict} />
+              {p.daily && streak && (
+                <div className="streakwin">
+                  <b>{streakLine(streak)}</b>
+                  <StreakDots s={streak} />
+                  <span className="muted small">Come back tomorrow for the next daily puzzle.</span>
+                </div>
+              )}
               <div className="row">
-                <button className="primary" onClick={goNext}>Next puzzle</button>
+                <button className="primary" onClick={goNext}>{p.daily ? "Done" : "Next puzzle"}</button>
                 {p.gameCode && <Link to={`/g/${p.gameCode}`} className="link">Review the game</Link>}
               </div>
             </div>

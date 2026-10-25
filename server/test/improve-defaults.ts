@@ -3,6 +3,9 @@
 //   npx tsx test/improve-defaults.ts
 import { Chess, type Move } from "chess.js";
 import { DEFAULT_PUZZLES } from "../src/improve/defaults.js";
+import { DAILY_POOL } from "../src/improve/dailyPool.js";
+
+const ALL = [...DEFAULT_PUZZLES, ...DAILY_POOL];
 
 const VAL: Record<string, number> = { p: 100, n: 300, b: 300, r: 500, q: 900, k: 0 };
 const MATE = 100000;
@@ -30,7 +33,9 @@ function search(c: Chess, depth: number, alpha: number, beta: number, ply: numbe
 }
 
 let failed = 0;
-for (const p of DEFAULT_PUZZLES) {
+const SKIP = new Set((process.env.SKIP_KEYS || "").split(",")); // keys already verified in an earlier (interrupted) run
+for (const p of ALL) {
+  if (SKIP.has(p.key)) continue;
   const c = new Chess(p.fen);
   const scored = (c.moves({ verbose: true }) as Move[]).map((m) => {
     c.move(m);
@@ -45,6 +50,6 @@ for (const p of DEFAULT_PUZZLES) {
   console.log(`${ok ? "PASS" : "FAIL"}  ${p.key.padEnd(16)} best=${p.best} (${mine?.v ?? "illegal"}) next=${second?.uci} (${second?.v})`);
   if (!ok) failed++;
 }
-if (new Set(DEFAULT_PUZZLES.map((p) => p.key)).size !== DEFAULT_PUZZLES.length) { console.log("FAIL  duplicate keys"); failed++; }
+if (new Set(ALL.map((p) => p.key)).size !== ALL.length) { console.log("FAIL  duplicate keys"); failed++; }
 console.log(failed ? `\n${failed} FAILED` : "\nAll default puzzles verified");
 process.exit(failed ? 1 : 0);

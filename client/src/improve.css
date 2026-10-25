@@ -31,3 +31,14 @@
 .verifybox p { margin: 0; }
 .verifybox .codeline { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .verifybox code { font-size: 18px; letter-spacing: 1px; padding: 4px 10px; background: #161a1f; border-radius: 6px; user-select: all; }
+
+.dailycard, .streakcard { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; border-color: #d9a441; }
+.dailycard.done { border-color: var(--accent); } .streakcard.reached { background: #2a2412; }
+.dailycard h2, .streakcard h2 { margin: 0 0 4px; } .dailycard p, .streakcard p { margin: 4px 0; }
+.streakline { font-weight: 600; }
+.dailyright { display: grid; gap: 10px; justify-items: end; }
+.streakdots { display: flex; gap: 8px; }
+.sd { display: grid; justify-items: center; gap: 2px; width: 44px; padding: 6px 0; border-radius: 8px; background: #161a1f; border: 1px solid var(--line); }
+.sd span { font-size: 20px; line-height: 24px; filter: grayscale(1) opacity(.4); } .sd.done span { filter: none; }
+.sd.today { border-color: #d9a441; } .sd small { font-size: 10px; color: var(--muted); }
+.streakwin { display: grid; gap: 8px; margin: 8px 0; padding: 10px; border-radius: 8px; background: #2a2412; border: 1px solid #d9a441; }

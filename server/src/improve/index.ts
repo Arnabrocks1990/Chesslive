@@ -8,6 +8,13 @@ import { isDbUnavailable, query } from "../db.js";
 import { THEME_LABEL, tagGame } from "../coach/tagger.js";
 import { hintFor, verdictExtras } from "../coach/hints.js";
 import { DEFAULT_PUZZLES } from "./defaults.js";
+import { DAILY_POOL } from "./dailyPool.js";
+
+// The daily puzzle: one position per calendar day, the same for everybody, picked from the verified pool.
+// Solving it extends the streak; a day is "today" in this time zone.
+const DAILY_TZ = process.env.DAILY_TZ || "Asia/Kolkata";
+const STREAK_GOAL = 5;
+const POOL = [...DEFAULT_PUZZLES, ...DAILY_POOL];
 
 const GAMES_FOR_PUZZLES = 5; // puzzles come from this many most recent finished games
 const PER_GAME = 3; // the biggest mistakes of each game
@@ -45,6 +52,8 @@ export async function ensureImproveSchema() {
        created_at TIMESTAMPTZ NOT NULL DEFAULT now())`,
     `CREATE UNIQUE INDEX IF NOT EXISTS improve_puzzles_game_uq ON improve_puzzles (user_id, game_id, ply) WHERE source = 'game'`,
     `CREATE UNIQUE INDEX IF NOT EXISTS improve_puzzles_default_uq ON improve_puzzles (user_id, default_key) WHERE source = 'default'`,
+    `ALTER TABLE improve_puzzles ADD COLUMN IF NOT EXISTS daily_date DATE`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS improve_puzzles_daily_uq ON improve_puzzles (user_id, daily_date) WHERE source = 'daily'`,
   ]) await query(sql);
 }
 
@@ -150,6 +159,53 @@ export async function puzzleSet(userId: number) {
     gamesConsidered: recent.length,
     usingDefaults: puzzles.some((p) => p.source === "default"),
     solved: puzzles.filter((p) => p.status === "solved").length,
+  };
+}
+
+// ---- daily puzzle + streak ----------------------------------------------------------------------------
+
+const dayNumber = (d: string) => Math.floor(Date.parse(d + "T00:00:00Z") / 86_400_000);
+const dayString = (n: number) => new Date(n * 86_400_000).toISOString().slice(0, 10);
+
+async function today(): Promise<string> {
+  const [r] = await query<{ d: string }>(`SELECT to_char((now() AT TIME ZONE $1)::date, 'YYYY-MM-DD') AS d`, [DAILY_TZ]);
+  return r.d;
+}
+
+/** Days on which the player solved that day's puzzle (on that same day), as a streak summary. */
+export async function streakOf(userId: number, todayStr?: string) {
+  const t = todayStr ?? (await today());
+  const rows = await query<{ d: string }>(
+    `SELECT to_char(daily_date, 'YYYY-MM-DD') AS d FROM improve_puzzles
+     WHERE user_id = $1 AND source = 'daily' AND status = 'solved' AND (solved_at AT TIME ZONE $2)::date = daily_date
+     ORDER BY daily_date`, [userId, DAILY_TZ]);
+  const done = new Set(rows.map((r) => dayNumber(r.d)));
+  const tn = dayNumber(t);
+  // the streak is alive if today or yesterday is done (today can still be completed)
+  let cur = 0;
+  for (let n = done.has(tn) ? tn : tn - 1; done.has(n); n--) cur++;
+  let best = 0, run = 0, prev = -Infinity;
+  for (const n of [...done].sort((a, b) => a - b)) { run = n === prev + 1 ? run + 1 : 1; best = Math.max(best, run); prev = n; }
+  return {
+    current: cur, best, goal: STREAK_GOAL, goalReached: cur >= STREAK_GOAL, doneToday: done.has(tn), totalSolved: done.size,
+    last5: Array.from({ length: STREAK_GOAL }, (_, i) => { const n = tn - (STREAK_GOAL - 1 - i); return { date: dayString(n), done: done.has(n), today: n === tn }; }),
+  };
+}
+
+/** Today's puzzle for this player (created on first ask), with their streak. */
+export async function dailyFor(userId: number) {
+  const t = await today();
+  const p = POOL[dayNumber(t) % POOL.length];
+  await query(
+    `INSERT INTO improve_puzzles (user_id, source, default_key, daily_date, title, fen, best_uci, themes, phase, idea)
+     VALUES ($1,'daily',$2,$3,$4,$5,$6,$7,$8,$9) ON CONFLICT DO NOTHING`,
+    [userId, p.key, t, `Daily puzzle: ${p.title}`, p.fen, p.best, p.themes, p.phase, p.idea]
+  );
+  const [row] = await query<any>(`SELECT id, title, status, hints_used, fen FROM improve_puzzles WHERE user_id=$1 AND source='daily' AND daily_date=$2`, [userId, t]);
+  return {
+    date: t,
+    puzzle: { id: row.id, title: row.title, status: row.status, hintsUsed: row.hints_used, turn: row.fen.split(" ")[1] },
+    streak: await streakOf(userId, t),
   };
 }
 
@@ -275,6 +331,9 @@ export async function dashboard(user: User) {
   if (pz.solved + pz.revealed >= 3 && pz.solved_clean / (pz.solved + pz.revealed) < 0.4) { score += 1; reasons.push("puzzles are still hard without hints"); }
   if (rec.games >= 5 && (rec.wins / rec.games) < 0.35) { score += 1; reasons.push(`a ${winRate}% win rate`); }
   if (rated.length >= 5 && ratingDelta < -30) { score += 1; reasons.push(`your rating fell ${-ratingDelta} points recently`); }
+  const streak = await streakOf(user.id);
+  if (streak.current >= 2) insights.push({ tone: "good", text: `🔥 You are on a ${streak.current}-day puzzle streak${streak.current >= STREAK_GOAL ? ". The 5-day goal is done, keep it going" : `. ${STREAK_GOAL - streak.current} more day${STREAK_GOAL - streak.current === 1 ? "" : "s"} to the ${STREAK_GOAL}-day badge`}.` });
+  else if (!streak.doneToday && pz.total > 0) insights.push({ tone: "tip", text: "Solve today's daily puzzle to start a streak." });
   const level = !analysed ? "none" : score >= 4 ? "strong" : score >= 2 ? "suggested" : "none";
   const recommendation = {
     level,
@@ -288,7 +347,7 @@ export async function dashboard(user: User) {
     rating: me.rating, ratedGames: me.rated_games, record: { ...rec, winRate }, ratingHistory: history, ratingDelta,
     quality: { analysed, accuracy, blunders, mistakes, inaccuracies, perGame: perGame.slice().reverse(), phases: phaseCount, themes },
     puzzles: { total: pz.total, solved: pz.solved, solvedClean: pz.solved_clean, revealed: pz.revealed, hints: pz.hints },
-    insights, recommendation,
+    insights, recommendation, streak: await streakOf(user.id),
   };
 }
 
@@ -313,6 +372,7 @@ export function registerImproveRoutes(app: Express, authed: (req: Request, res: 
   const asRow = (p: any) => ({ id: p.id, game_id: p.game_id ?? 0, ply: p.ply ?? 0, themes: p.themes, phase: p.phase, fen_before: p.fen, best_uci: p.best_uci, best_san: p.best_san ?? "", played_san: p.played_san ?? "" });
 
   app.get("/api/improve/puzzles", wrap(async (_req, res, u) => res.json(await puzzleSet(u.id))));
+  app.get("/api/improve/daily", wrap(async (_req, res, u) => res.json(await dailyFor(u.id))));
   app.get("/api/improve/dashboard", wrap(async (_req, res, u) => res.json(await dashboard(u))));
 
   app.get("/api/improve/puzzles/:id", wrap(async (req, res, u) => {
@@ -321,7 +381,8 @@ export function registerImproveRoutes(app: Express, authed: (req: Request, res: 
     res.json({
       id: p.id, source: p.source, title: p.title, fen: p.fen, turn: p.fen.split(" ")[1], themes: p.themes, phase: p.phase,
       status: p.status, hintsUsed: p.hints_used, attempts: p.attempts,
-      context: p.source === "game" ? `This position is from your game (move ${Math.ceil(p.ply / 2)}). In the game you played ${p.played_san} and it cost you ${Math.round(p.win_drop)}% of your winning chances. Find the better move.` : "Find the best move.",
+      daily: p.source === "daily",
+      context: p.source === "daily" ? "Today's puzzle, the same for everyone. Solve it to keep your streak going. Hints are free to use." : p.source === "game" ? `This position is from your game (move ${Math.ceil(p.ply / 2)}). In the game you played ${p.played_san} and it cost you ${Math.round(p.win_drop)}% of your winning chances. Find the better move.` : "Find the best move.",
       gameCode: g?.code ?? null,
     });
   }));
@@ -356,7 +417,7 @@ export function registerImproveRoutes(app: Express, authed: (req: Request, res: 
     await query(`UPDATE improve_puzzles SET attempts = attempts + 1 WHERE id=$1`, [p.id]);
     if (!correct) return void res.json({ correct: false, attempts: p.attempts + 1 });
     await query(`UPDATE improve_puzzles SET status='solved', solved_at=now() WHERE id=$1 AND status='new'`, [p.id]);
-    res.json({ correct: true, alternative: uci !== p.best_uci, verdict: await verdictOf(p, true) });
+    res.json({ correct: true, alternative: uci !== p.best_uci, verdict: await verdictOf(p, true), streak: p.source === "daily" ? await streakOf(u.id) : undefined });
   }));
 
   // "Show me": counts as not solved, but teaches the answer.

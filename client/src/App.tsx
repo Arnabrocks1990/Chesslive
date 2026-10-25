@@ -12,6 +12,7 @@ import { MODES, modeOf, tcLabel } from "./timeMode";
 import { LearnHome, LearnerMe, LessonPlayer, XpBar } from "./LearnPage";
 import { ImproveHome, ImprovePuzzle } from "./ImprovePage";
 import DashboardPage from "./DashboardPage";
+import { DailyCard } from "./ImprovePage";
 
 interface AuthCtx { user: User; logout: () => void }
 const Auth = createContext<AuthCtx>(null as unknown as AuthCtx);
@@ -213,6 +214,7 @@ function Lobby() {
 
   return (
     <main className="lobby">
+      <DailyCard />
       {me && (
         <section className="card learnbanner">
           {me.lessonsDone === 0 && !me.mode ? (

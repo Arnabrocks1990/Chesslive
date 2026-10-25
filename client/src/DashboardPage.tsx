@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "./api";
+import { Streak, StreakDots, streakLine } from "./ImprovePage";
 
 interface Dash {
   rating: number; ratedGames: number; ratingDelta: number;
@@ -8,6 +9,7 @@ interface Dash {
   ratingHistory: { at: string; rating: number }[];
   quality: { analysed: number; accuracy: number | null; blunders: number; mistakes: number; inaccuracies: number; perGame: { code: string; accuracy: number; blunders: number; result: string }[]; phases: Record<string, number>; themes: { key: string; label: string; count: number }[] };
   puzzles: { total: number; solved: number; solvedClean: number; revealed: number; hints: number };
+  streak: Streak;
   insights: { tone: "good" | "warn" | "tip"; text: string }[];
   recommendation: { level: "strong" | "suggested" | "none"; headline: string; reasons: string[]; pitch: string; hasCoach: boolean; isPro: boolean };
 }
@@ -58,6 +60,18 @@ export default function DashboardPage() {
         {rec.isPro
           ? <Link to="/coach" className="btn primary">Open your coach</Link>
           : <Link to="/coach" className={`btn ${rec.level === "none" ? "" : "primary"}`}>{rec.hasCoach ? "Continue with the AI Coach" : "Try the AI Coach"}</Link>}
+      </section>
+
+      <section className={`card streakcard ${d.streak.goalReached ? "reached" : ""}`}>
+        <div>
+          <h2>🔥 Daily puzzle streak</h2>
+          <p className="streakline">{streakLine(d.streak)}</p>
+          <p className="muted small">Best streak: {d.streak.best} day{d.streak.best === 1 ? "" : "s"} · {d.streak.totalSolved} daily puzzle{d.streak.totalSolved === 1 ? "" : "s"} solved{d.streak.goalReached ? " · 🏅 5-day streak badge earned" : ""}</p>
+        </div>
+        <div className="dailyright">
+          <StreakDots s={d.streak} />
+          {!d.streak.doneToday && <Link to="/improve" className="btn primary">Solve today's puzzle</Link>}
+        </div>
       </section>
 
       <div className="statgrid">

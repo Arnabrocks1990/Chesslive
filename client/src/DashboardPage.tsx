@@ -84,7 +84,7 @@ export default function DashboardPage() {
           <Bars max={100} items={[
             { label: "As White", value: r.white.g ? Math.round((r.white.w / r.white.g) * 100) : 0 },
             { label: "As Black", value: r.black.g ? Math.round((r.black.w / r.black.g) * 100) : 0 },
-            { label: "Vs bot", value: r.vsBot.g ? Math.round((r.vsBot.w / r.vsBot.g) * 100) : 0 },
+            { label: "Vs Coach", value: r.vsBot.g ? Math.round((r.vsBot.w / r.vsBot.g) * 100) : 0 },
             { label: "Vs players", value: r.vsHuman.g ? Math.round((r.vsHuman.w / r.vsHuman.g) * 100) : 0 },
           ]} />
           <p className="muted small">Win rate in % · White {pct(r.white)}, Black {pct(r.black)}</p>

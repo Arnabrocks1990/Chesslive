@@ -217,7 +217,7 @@ function Lobby() {
         <section className="card learnbanner">
           {me.lessonsDone === 0 && !me.mode ? (
             <>
-              <div><h2>New to chess?</h2><p className="muted">Try Learner mode: short hands-on lessons that teach the rules from zero, then a gentle bot to practise on.</p></div>
+              <div><h2>New to chess?</h2><p className="muted">Try Learner mode: short hands-on lessons that teach the rules from zero, then a gentle Coach to practise on.</p></div>
               <button className="primary" onClick={() => nav("/learn")}>Start learning</button>
             </>
           ) : (
@@ -278,7 +278,7 @@ function Lobby() {
             </select>
           </label>
         )}
-        <button className="primary" onClick={create}>{vsBot ? "Start game vs bot" : "Create game & get invite link"}</button>
+        <button className="primary" onClick={create}>{vsBot ? "Start game vs Coach" : "Create game & get invite link"}</button>
         {error && <div className="error">{error}</div>}
       </section>
 
@@ -326,7 +326,7 @@ function Lobby() {
           </>
         ) : (
           <>
-            <p className="muted">New players ranked by what they have learned. Finish lessons and play the Beginner bot to earn XP.</p>
+            <p className="muted">New players ranked by what they have learned. Finish lessons and play the Beginner Coach to earn XP.</p>
             {lboard.length === 0 && <p className="muted">No learners yet. <Link to="/learn">Start the first lesson.</Link></p>}
             <ol className="board">
               {lboard.map((r) => (

@@ -35,5 +35,5 @@ const before = await rating(A);
 await emit(sa, "resign", code); await new Promise((r) => setTimeout(r, 500));
 console.log("4. resign vs bot easy(1400): plies", last.moves.length, "change", JSON.stringify(last.ratingChange), "| rating", before, "->", await rating(A));
 console.log("leaderboard top:", JSON.stringify((await get("/api/leaderboard", A.token)).slice(0, 3)));
-console.log("bot never rated:", JSON.stringify((await get("/api/leaderboard", A.token)).filter((r) => r.username === "Stockfish")));
+console.log("bot never rated:", JSON.stringify((await get("/api/leaderboard", A.token)).filter((r) => r.username === "Coach")));
 process.exit(0);

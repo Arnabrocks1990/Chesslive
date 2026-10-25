@@ -315,7 +315,7 @@ export function CoachSession() {
       {s.type === "play" && (s.state === "available" || s.state === "retry") && (
         <section className="card">
           <h2>2 · Practise: play a game</h2>
-          <p>Play one game against the Stockfish bot (15+10). Use the safety checks above on every move. When it ends, the coach counts your blunders and the coach decides what happens next.</p>
+          <p>Play one game against Coach (15+10). Use the safety checks above on every move. When it ends, the coach counts your blunders and the coach decides what happens next.</p>
           <button className="primary" disabled={busy} onClick={() => start()}>{busy ? "Setting up…" : "Start practice game"}</button>
         </section>
       )}

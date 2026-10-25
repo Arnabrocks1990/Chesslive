@@ -5,6 +5,7 @@ import type { Server } from "socket.io";
 import type { User } from "./auth.js";
 import { query } from "./db.js";
 import { BEGINNER_BOT_ELO, awardGameEvents, beginnerChoice } from "./learner.js";
+import { BOT_NAME } from "./auth.js";
 import { FULL_STRENGTH_ELO, MIN_RATED_PLIES, START_RATING, eloChange, scoreOf, type Side } from "./elo.js";
 
 type Color = "w" | "b";
@@ -166,14 +167,14 @@ export class GameManager {
     return g;
   }
 
-  /** No opponent showed up: seat the Stockfish bot in the empty seat and start the game. */
+  /** No opponent showed up: seat the computer opponent ("Coach") in the empty seat and start the game. */
   async playBot(code: string, user: User, level?: string) {
     const g = await this.get(code);
     if (!g) throw new GameError("Game not found");
     if (g.status !== "waiting" || (g.white && g.black)) throw new GameError("An opponent has already joined");
     if (g.white?.id !== user.id && g.black?.id !== user.id) throw new GameError("Only the player who created the game can do this");
     const elo = BOT_ELO[String(level)] ?? null;
-    const seat = { id: this.botId, name: "Stockfish", rating: null };
+    const seat = { id: this.botId, name: BOT_NAME, rating: null };
     if (!g.white) g.white = seat;
     else g.black = seat;
     g.bot = { color: g.white === seat ? "w" : "b", elo };
@@ -384,7 +385,7 @@ export class GameManager {
   async botMove(code: string, fen: string, uci: string) {
     const g = this.games.get(code);
     if (!g?.bot || g.status !== "active" || g.chess.fen() !== fen) return; // stale reply
-    await this.move(code, { id: this.botId, username: "Stockfish", role: "bot" }, {
+    await this.move(code, { id: this.botId, username: BOT_NAME, role: "bot" }, {
       from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.slice(4) || undefined,
     });
   }

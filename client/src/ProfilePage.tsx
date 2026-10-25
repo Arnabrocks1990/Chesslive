@@ -58,7 +58,7 @@ export default function ProfilePage() {
           {p.recent.map((g) => (
             <li key={g.code}>
               <Link to={`/g/${g.code}`}>{g.white} vs {g.black}</Link>
-              <span className="muted">{g.result}{g.vsBot ? " · vs bot" : ""}</span>
+              <span className="muted">{g.result}{g.vsBot ? " · vs Coach" : ""}</span>
             </li>
           ))}
         </ul>

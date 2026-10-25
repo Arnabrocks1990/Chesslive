@@ -105,7 +105,7 @@ export default function GamePage() {
     const seat = c === "w" ? game.white : game.black;
     return seat ? `${seat.name}${seat.rating ? ` (${seat.rating})` : ""}` : "Waiting for opponent…";
   };
-  const fmtChange = (d: number | null | undefined) => (d === null || d === undefined ? "bot (unrated)" : d > 0 ? `+${d}` : d < 0 ? `−${-d}` : "±0");
+  const fmtChange = (d: number | null | undefined) => (d === null || d === undefined ? "Coach (unrated)" : d > 0 ? `+${d}` : d < 0 ? `−${-d}` : "±0");
   const inviteLink = `${location.origin}/g/${code}`;
   const squareStyles: Record<string, object> = {};
   if (game.lastMove) {
@@ -172,7 +172,7 @@ export default function GamePage() {
             </div>
             {mySide && (
               <div className="botbox">
-                <p className="muted">No opponent? Play the Stockfish bot instead.</p>
+                <p className="muted">No opponent? Play Coach instead.</p>
                 <div className="row">
                   <select value={botLevel} onChange={(e) => setBotLevel(e.target.value)}>
                     <option value="easy">Easy (~1400)</option>
@@ -183,7 +183,7 @@ export default function GamePage() {
                   <button
                     className="primary"
                     onClick={() =>
-                      socket.current?.emit("playBot", { code, level: botLevel }, (r: { ok: boolean; error?: string }) => !r.ok && setError(r.error || "Could not start bot game"))
+                      socket.current?.emit("playBot", { code, level: botLevel }, (r: { ok: boolean; error?: string }) => !r.ok && setError(r.error || "Could not start the game vs Coach"))
                     }
                   >
                     Play bot

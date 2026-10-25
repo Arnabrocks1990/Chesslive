@@ -81,8 +81,8 @@ export function LearnHome() {
           <div className="pdot">🏁</div>
           <div className="pcard">
             <b>Play your first game</b>
-            <div className="muted small">Face the Beginner bot. It plays gently and makes mistakes on purpose. Finishing a game and winning earn bonus XP.</div>
-            <button className="primary" disabled={busy} onClick={playBot}>{busy ? "Setting up…" : "Play the Beginner bot"}</button>
+            <div className="muted small">Face the Beginner Coach. It plays gently and makes mistakes on purpose. Finishing a game and winning earn bonus XP.</div>
+            <button className="primary" disabled={busy} onClick={playBot}>{busy ? "Setting up…" : "Play the Beginner Coach"}</button>
           </div>
         </li>
       </ol>
@@ -217,7 +217,7 @@ export function LessonPlayer() {
           <XpBar me={result.me} />
           <div className="row">
             {nextLesson ? <button className="primary" onClick={() => nav(`/learn/${nextLesson.key}`)}>Next: {nextLesson.title}</button>
-              : <button className="primary" onClick={playBot}>Play the Beginner bot</button>}
+              : <button className="primary" onClick={playBot}>Play the Beginner Coach</button>}
             <button onClick={() => nav("/learn")}>Back to the path</button>
           </div>
         </section>

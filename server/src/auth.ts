@@ -103,10 +103,19 @@ export async function guest(name?: string): Promise<User> {
   throw new Error("Could not create guest");
 }
 
+/** The computer opponent players see as "Coach". The engine behind it is still Stockfish. */
+export const BOT_NAME = "Coach";
+
 export async function ensureBot(): Promise<number> {
+  const [bot] = await query<{ id: number; username: string }>(`SELECT id, username FROM users WHERE role = 'bot' ORDER BY id LIMIT 1`);
+  if (bot) {
+    // Older databases call it "Stockfish": rename in place, so its past games show the new name too.
+    if (bot.username !== BOT_NAME) await query(`UPDATE users SET username=$2 WHERE id=$1 AND NOT EXISTS (SELECT 1 FROM users WHERE username=$2)`, [bot.id, BOT_NAME]);
+    return bot.id;
+  }
   const [row] = await query<{ id: number }>(
-    `INSERT INTO users (username, role) VALUES ('Stockfish', 'bot')
-     ON CONFLICT (username) DO UPDATE SET role = 'bot', password_hash = NULL RETURNING id`
+    `INSERT INTO users (username, role) VALUES ($1, 'bot')
+     ON CONFLICT (username) DO UPDATE SET role = 'bot', password_hash = NULL RETURNING id`, [BOT_NAME]
   );
   return row.id;
 }

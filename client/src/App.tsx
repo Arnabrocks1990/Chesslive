@@ -265,7 +265,7 @@ function Lobby() {
         <QuickMatch minutes={minutes} increment={increment} />
         <div className="muted small" style={{ margin: "8px 0" }}>or set up a game yourself:</div>
         <label className="check">
-          <input type="checkbox" checked={vsBot} onChange={(e) => setVsBot(e.target.checked)} /> Play against the Stockfish bot
+          <input type="checkbox" checked={vsBot} onChange={(e) => setVsBot(e.target.checked)} /> Play Coach
         </label>
         {vsBot && (
           <label>Bot strength

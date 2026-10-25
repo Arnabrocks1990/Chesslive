@@ -144,3 +144,6 @@ label.check input { width: auto; }
 
 /* keep the timeline lock icon from covering the paywall's first line */
 .tl-gate .paywall { padding-left: 46px; }
+
+.quickmatch { margin: 12px 0 4px; }
+.quickmatch .searching { display: flex; flex-direction: column; gap: 6px; padding: 12px; border: 1px dashed var(--accent, #6b8afd); border-radius: 8px; }

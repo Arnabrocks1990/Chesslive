@@ -5,10 +5,12 @@ CREATE TABLE IF NOT EXISTS users (
   username      TEXT UNIQUE NOT NULL,
   password_hash TEXT,
   role          TEXT NOT NULL DEFAULT 'player', -- admin | player | guest | bot
-  rating        INT NOT NULL DEFAULT 1200,      -- Elo
+  rating        INT NOT NULL DEFAULT 600,       -- Elo
   rated_games   INT NOT NULL DEFAULT 0,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- default was 1200 before; existing accounts keep their rating, new ones start at 600
+ALTER TABLE users ALTER COLUMN rating SET DEFAULT 600;
 
 CREATE TABLE IF NOT EXISTS games (
   id               SERIAL PRIMARY KEY,

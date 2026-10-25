@@ -1,6 +1,6 @@
-import { FormEvent, ReactNode, createContext, useContext, useEffect, useState } from "react";
+import { FormEvent, ReactNode, createContext, useContext, useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { User, api, getToken, setToken } from "./api";
+import { User, api, connectSocket, getToken, setToken } from "./api";
 import GamePage from "./GamePage";
 import ProfilePage from "./ProfilePage";
 import { CoachHome, CoachPlayer, CoachShare } from "./CoachPage";
@@ -134,6 +134,46 @@ interface GameRow {
   time_control_sec: number; increment_sec: number;
 }
 
+/** Random opponent: waits in the server's matchmaking queue (Elo-aware, same time control) until paired. */
+function QuickMatch({ minutes, increment }: { minutes: number; increment: number }) {
+  const nav = useNavigate();
+  const [searching, setSearching] = useState(false);
+  const [status, setStatus] = useState<{ waiting: number; seconds: number; range: number | null; rating: number } | null>(null);
+  const [error, setError] = useState("");
+  const sock = useRef<ReturnType<typeof connectSocket> | null>(null);
+  const stop = () => { sock.current?.emit("cancelMatch", null); sock.current?.close(); sock.current = null; setSearching(false); setStatus(null); };
+  useEffect(() => () => { sock.current?.close(); }, []); // leaving the lobby cancels the search (the server drops the ticket on disconnect)
+
+  function start() {
+    setError("");
+    const s = connectSocket();
+    sock.current = s;
+    setSearching(true);
+    s.on("matchStatus", setStatus);
+    s.on("matched", (m: { code: string }) => { s.close(); sock.current = null; nav(`/g/${m.code}`); });
+    s.on("matchError", (e: { error: string }) => { setError(e.error); stop(); });
+    s.on("connect_error", () => { setError("Can't reach the server. Please try again."); stop(); });
+    s.on("connect", () => s.emit("findMatch", { minutes, increment }, (r: { ok: boolean; error?: string }) => { if (!r.ok) { setError(r.error || "Could not search"); stop(); } }));
+  }
+
+  return (
+    <div className="quickmatch">
+      {!searching ? (
+        <button type="button" className="primary" onClick={start}>🎲 Find a random opponent ({tcLabel(minutes, increment)})</button>
+      ) : (
+        <div className="searching">
+          <span>Searching for an opponent near your rating{status ? ` (${status.rating})` : ""}…</span>
+          <span className="muted small">
+            {status ? `${status.seconds}s · ${status.range === null ? "anyone" : `±${status.range} Elo`} · ${status.waiting} waiting` : "joining the queue"}
+          </span>
+          <button type="button" onClick={stop}>Cancel</button>
+        </div>
+      )}
+      {error && <div className="error">{error}</div>}
+    </div>
+  );
+}
+
 function Lobby() {
   const nav = useNavigate();
   const [color, setColor] = useState("random");
@@ -218,6 +258,8 @@ function Lobby() {
           )}
           <div className="muted small">Selected: <b>{picked.label}</b> · {tcLabel(minutes, increment)}</div>
         </div>
+        <QuickMatch minutes={minutes} increment={increment} />
+        <div className="muted small" style={{ margin: "8px 0" }}>or set up a game yourself:</div>
         <label className="check">
           <input type="checkbox" checked={vsBot} onChange={(e) => setVsBot(e.target.checked)} /> Play against the Stockfish bot
         </label>
@@ -266,7 +308,7 @@ function Lobby() {
         </div>
         {tab === "players" ? (
           <>
-            <p className="muted">Everyone starts at 1200 Elo.</p>
+            <p className="muted">New players start at 600 Elo.</p>
             {board.length === 0 && <p className="muted">No rated games yet.</p>}
             <ol className="board">
               {board.map((r) => (

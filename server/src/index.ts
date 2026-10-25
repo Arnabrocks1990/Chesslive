@@ -22,6 +22,7 @@ import { ensureBillingSchema } from "./billing/schema.js";
 import { registerBillingRoutes } from "./billing/routes.js";
 import { coachOwnerGate } from "./coach/access.js";
 import { adminRouter } from "./admin/router.js";
+import { Matchmaker } from "./matchmaker.js";
 
 const app = express();
 app.use(cors());
@@ -39,6 +40,7 @@ let lastRedisLog = 0;
 for (const r of [redis, sub]) r.on("error", (e) => { if (Date.now() - lastRedisLog > 30_000) { lastRedisLog = Date.now(); console.error("redis unavailable (retrying):", e.message); } });
 process.on("unhandledRejection", (e) => console.error("unhandled rejection:", e));
 const games = new GameManager(io, redis);
+const matchmaker = new Matchmaker(io, games);
 
 // ---- REST -----------------------------------------------------------------
 
@@ -171,6 +173,15 @@ io.on("connection", (socket) => {
       if (user.role === "admin") await sendAdminSuggestion(socket, g.code);
     })
   );
+  // Random matchmaking by Elo + time control; the "matched" event tells both players which game to open.
+  socket.on("findMatch", (p: { minutes?: number; increment?: number }, ack?: Ack) =>
+    safe(ack, async () => {
+      if (user.role === "bot") throw new GameError("Not available");
+      await matchmaker.enqueue(user, socket.id, Number(p?.minutes), Number(p?.increment));
+    })
+  );
+  socket.on("cancelMatch", (_p: unknown, ack?: Ack) => safe(ack, async () => matchmaker.cancel(user.id, socket.id)));
+  socket.on("disconnect", () => matchmaker.cancel(user.id, socket.id));
   socket.on("move", (p: { code: string; from: string; to: string; promotion?: string }, ack?: Ack) =>
     safe(ack, () => games.move(String(p.code), user, p))
   );

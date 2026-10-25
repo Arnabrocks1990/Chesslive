@@ -40,7 +40,7 @@ check("the game state is served from the deployed database", state.moves?.length
 await emit(sb, "resign", code);
 sa.close(); sb.close();
 await new Promise((r) => setTimeout(r, 500));
-check("resignation finishes the game and updates Elo", (await call(`/api/games/${code}`)).data.status === "finished" && (await call("/api/me", { token: a.token })).data.rating >= 1200);
+check("resignation finishes the game and updates Elo", (await call(`/api/games/${code}`)).data.status === "finished" && (await call("/api/me", { token: a.token })).data.rating >= 600);
 
 check("the default admin password is refused", (await call("/api/login", { body: { username: "admin", password: "admin123" } })).status === 400);
 if (ADMIN_PASSWORD) {

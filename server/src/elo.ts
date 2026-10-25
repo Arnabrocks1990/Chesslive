@@ -1,4 +1,4 @@
-export const START_RATING = 1200;
+export const START_RATING = 600; // new accounts start here (accounts created earlier keep the rating they had)
 export const MIN_RATED_PLIES = 4; // very short games are not rated (stops rating farming by instant resignation)
 export const FULL_STRENGTH_ELO = 3200; // rating the full-strength bot counts as when rating its opponent
 

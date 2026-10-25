@@ -248,7 +248,7 @@ function explainPrompt(r: any, turn: string): string {
   return [
     "You are a concise chess coach. Reply with plain text only, no tools, no markdown, at most 2 short sentences (under 45 words total).",
     `Position (FEN): ${r.fen}. ${side} to move.`,
-    "Stockfish's top candidate moves:",
+    "The engine's top candidate moves:",
     ...lines,
     history,
     `Explain why ${r.top_moves[0].san} is best for ${side}, and the main idea/threat to watch for.`,

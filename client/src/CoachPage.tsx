@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { api } from "./api";
 import { useAuth } from "./App";
 import { Access, SessionRow, Timeline } from "./CoachSession";
-import { Extras, Hint, HintBox, LangTabs, PlainData, VerdictBody, arrowsFor, coachify, highlightStyles, useLang, usePlain, verdictSpeech } from "./lang";
+import { Extras, Hint, HintBox, LangTabs, PlainData, VerdictBody, arrowsFor, coachify, highlightStyles, stepText, useLang, usePlain, verdictSpeech } from "./lang";
 import { VoiceToggle, useVoice } from "./voice";
 
 // ---- types -------------------------------------------------------------------
@@ -58,8 +58,8 @@ function Trace({ runId, onDone }: { runId: number; onDone: () => void }) {
       <div className="muted small">{TRIGGER[run.trigger] ?? run.trigger} · {run.status === "running" ? "working…" : run.status}{run.mode ? ` · decisions by ${run.mode === "llm" ? "AI planner" : "rules"}` : ""}</div>
       <ol>
         {steps.map((s) => (
-          <li key={s.id} className={s.output_summary === "running..." || s.output_summary.startsWith("Stockfish ") ? "live" : s.output_summary.startsWith("failed") ? "bad" : "ok"}>
-            <code>{s.tool}</code> <span>{s.output_summary}</span>
+          <li key={s.id} className={s.output_summary === "running..." || /^(Stockfish|Analyzing) /.test(s.output_summary) ? "live" : s.output_summary.startsWith("failed") ? "bad" : "ok"}>
+            <code>{s.tool}</code> <span>{stepText(s.output_summary)}</span>
             {s.note && <div className="note">{s.note}</div>}
           </li>
         ))}
@@ -338,7 +338,7 @@ export function CoachHome() {
         <h1>An AI chess coach that works on its own.</h1>
         <p>Chess.com shows you what you got wrong. This coach decides what you should practise next, drills you on your <b>own</b> mistakes, and keeps updating your plan as new games appear.</p>
         <ul className="muted">
-          <li>Reads your finished games and runs Stockfish on every move</li>
+          <li>Reads your finished games and checks every move</li>
           <li>Finds the mistake patterns you keep repeating</li>
           <li>Builds your weekly plan and a drill set from your own blunders</li>
           <li>Wakes itself when you play new games, and shows every step it took</li>
@@ -369,9 +369,9 @@ export function CoachHome() {
             </div>
           </div>
         )}
-        <button className="primary" disabled={busy}>{busy ? "Checking account…" : verify && mode !== "pgn" ? "I've added the code. Verify and analyse" : "Analyse my games"}</button>
+        <button className="primary" disabled={busy}>{busy ? "Checking account…" : verify && mode !== "pgn" ? "I've added the code. Verify and analyze" : "Analyze my games"}</button>
         {error && <div className="error">{error}</div>}
-        <div className="muted small">Only your own finished, public games are analysed, and we check the account is yours with a short code in your public profile (no password needed). Pasted PGNs need no check. No live-game assistance. You can delete your data any time.</div>
+        <div className="muted small">Only your own finished, public games are analyzed, and we check the account is yours with a short code in your public profile (no password needed). Pasted PGNs need no check. No live-game assistance. You can delete your data any time.</div>
       </form>
       {players.length > 0 && (
         <section className="card">

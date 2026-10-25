@@ -1,6 +1,7 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { api } from "./api";
+import { stepText } from "./lang";
 
 // Floating coach assistant. Deliberately not rendered on game pages: the coach never helps during live play.
 
@@ -121,8 +122,8 @@ export default function CoachWidget() {
                 </div>
                 <div className="cw-steps">
                   {steps.slice(-5).map((s) => (
-                    <div key={s.id} className={s.output_summary === "running..." || s.output_summary.startsWith("Stockfish ") ? "live" : ""}>
-                      <code>{s.tool}</code> {s.output_summary}
+                    <div key={s.id} className={s.output_summary === "running..." || /^(Stockfish|Analyzing) /.test(s.output_summary) ? "live" : ""}>
+                      <code>{s.tool}</code> {stepText(s.output_summary)}
                     </div>
                   ))}
                 </div>

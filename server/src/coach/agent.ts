@@ -157,7 +157,7 @@ function rulesDecision(ctx: any): Decision {
   const top = ctx.weaknesses.slice(0, 3).map((w: WeaknessRow) => w.theme);
   const improving = ctx.weaknesses.filter((w: WeaknessRow) => w.trend === "improving").map((w: WeaknessRow) => w.theme);
   const base = { mode: "rules" as const, nudge: null };
-  if (ctx.games < 3) return { ...base, action: "ask_more_games", focus_themes: top, rationale: `Only ${ctx.games} analysed game(s). Too few to draw reliable conclusions, so I will wait for more games.` };
+  if (ctx.games < 3) return { ...base, action: "ask_more_games", focus_themes: top, rationale: `Only ${ctx.games} analyzed game(s). Too few to draw reliable conclusions, so I will wait for more games.` };
   const focus = ctx.weaknesses.filter((w: WeaknessRow) => w.trend !== "improving").slice(0, 3).map((w: WeaknessRow) => w.theme);
   const same = ctx.previousFocus.length && focus.every((t: string) => ctx.previousFocus.includes(t));
   if (!ctx.previousFocus.length) return { ...base, action: "adjust_focus", focus_themes: focus, rationale: `First plan. Focusing on the three costliest recurring patterns: ${focus.map((t: string) => THEME_LABEL[t]).join(", ")}.` };
@@ -266,10 +266,10 @@ async function runLoop(redis: Redis, playerId: number, runId: number, trigger: s
       const [g] = await query<{ code: string; plies: string }>(`SELECT code, (SELECT COUNT(*) FROM moves WHERE game_id=games.id)::text plies FROM games WHERE id=$1`, [id]);
       await t.tool("analyse_game", { game: g.code, plies: Number(g.plies) }, async (stepId) => {
         await queueAnalysis(redis, id, g.code);
-        const ok = await waitForAnalysis(id, 240_000, (p) => void t.progress(stepId, `Stockfish ${p.done}/${p.total} positions`));
+        const ok = await waitForAnalysis(id, 240_000, (p) => void t.progress(stepId, `Analyzing ${p.done}/${p.total} positions`));
         if (!ok) throw new Error("analysis timed out");
         positions += Number(g.plies) + 1;
-        return { value: null, summary: `Analysed ${Number(g.plies) + 1} positions` };
+        return { value: null, summary: `Analyzed ${Number(g.plies) + 1} positions` };
       });
       await t.tool("tag_mistakes", { game: g.code }, async () => {
         const tags = await tagStoredGame(id);
@@ -282,7 +282,7 @@ async function runLoop(redis: Redis, playerId: number, runId: number, trigger: s
   // DIAGNOSE
   const rank = await t.tool("rank_weaknesses", {}, async () => {
     const r = await rankWeaknesses(playerId);
-    return { value: r, summary: r.rows.length ? `Top patterns: ${r.rows.slice(0, 3).map((w) => `${w.label} (${w.count}x, ${w.trend})`).join("; ")}` : `${r.games} game(s) analysed, no costly patterns yet`, note: r.games < 3 ? "Fewer than 3 analysed games; conclusions are weak." : undefined };
+    return { value: r, summary: r.rows.length ? `Top patterns: ${r.rows.slice(0, 3).map((w) => `${w.label} (${w.count}x, ${w.trend})`).join("; ")}` : `${r.games} game(s) analyzed, no costly patterns yet`, note: r.games < 3 ? "Fewer than 3 analysed games; conclusions are weak." : undefined };
   });
   const progress = await evaluateProgress(playerId);
   const [lastPlan] = await query<any>(`SELECT * FROM plans WHERE player_id=$1 ORDER BY version DESC LIMIT 1`, [playerId]);

@@ -305,8 +305,8 @@ export async function dashboard(user: User) {
   const insights: { tone: "good" | "warn" | "tip"; text: string }[] = [];
   const winRate = rec.games ? Math.round((rec.wins / rec.games) * 100) : null;
   if (!rec.games) insights.push({ tone: "tip", text: "Play your first game to start building your dashboard. Finished games are analyzed within a minute or two." });
-  else if (!analysed) insights.push({ tone: "tip", text: "Your games are still being analysed. Check back in a minute for accuracy and mistake insights." });
-  if (accuracy !== null) insights.push({ tone: accuracy >= 80 ? "good" : accuracy >= 65 ? "tip" : "warn", text: `Your average accuracy over the last ${analysed} analysed game${analysed > 1 ? "s" : ""} is ${accuracy}%.` });
+  else if (!analysed) insights.push({ tone: "tip", text: "Your games are still being analyzed. Check back in a minute for accuracy and mistake insights." });
+  if (accuracy !== null) insights.push({ tone: accuracy >= 80 ? "good" : accuracy >= 65 ? "tip" : "warn", text: `Your average accuracy over the last ${analysed} analyzed game${analysed > 1 ? "s" : ""} is ${accuracy}%.` });
   if (analysed) {
     const per = (blunders / analysed).toFixed(1);
     insights.push({ tone: blunders / analysed >= 2 ? "warn" : blunders / analysed < 1 ? "good" : "tip", text: `You make ${per} blunder${per === "1.0" ? "" : "s"} per game on average. Most games at your level are decided by the first big blunder.` });

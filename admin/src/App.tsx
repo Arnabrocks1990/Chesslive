@@ -268,7 +268,7 @@ function Overview({ onAuth, goto }: { onAuth: () => void; goto: (t: string) => v
         <Stat label="Live now" value={t.active_games} />
         <Stat label="Vs bot" value={t.bot_games} />
         <Stat label="Moves stored" value={t.moves.toLocaleString()} />
-        <Stat label="Positions analysed" value={t.analyses.toLocaleString()} sub={`${t.embeddings.toLocaleString()} embeddings`} />
+        <Stat label="Positions analyzed" value={t.analyses.toLocaleString()} sub={`${t.embeddings.toLocaleString()} embeddings`} />
       </div>
       {data.coach && (
         <>
@@ -306,7 +306,7 @@ function Users({ onAuth }: { onAuth: () => void }) {
   return (
     <>
       <input className="search" placeholder="Search username…" value={q} onChange={(e) => setQ(e.target.value)} />
-      <p className="muted small">{online} online now · analyses = positions Stockfish evaluated in the user's games, plus the coach's work for their profiles</p>
+      <p className="muted small">{online} online now · analyses = positions analyzed in the user's games, plus the coach's work for their profiles</p>
       {error && <div className="error">{error}</div>}
       <div className="card tablewrap">
         <table>

@@ -322,7 +322,7 @@ export function CoachSession() {
       {s.type === "play" && s.state === "active" && (
         <section className="card">
           <h2>2 · Practise: your game</h2>
-          <p className="muted">Waiting for the game to finish and be analysed. This page updates by itself.</p>
+          <p className="muted">Waiting for the game to finish and be analyzed. This page updates by itself.</p>
           <div className="row">
             <button className="primary" onClick={() => nav(`/g/${s.game_code}`)}>Resume game</button>
             <button disabled={busy} onClick={() => start(true)}>Start a new game instead</button>

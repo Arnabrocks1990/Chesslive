@@ -158,7 +158,7 @@ export function registerCoachRoutes(app: Express, redis: Redis, authed: Authed, 
     };
     const fallback = () => o.plan
       ? `Your plan focuses on ${o.plan.focus_themes.map((t: string) => o.themeLabels[t] ?? t).join(", ")}. ${o.plan.diagnosis}`
-      : "I need at least 3 analysed games before I can say anything reliable. Let the coach run first.";
+      : "I need at least 3 analyzed games before I can say anything reliable. Let the coach run first.";
     if (!config.explain || !o.analysedGames) return res.json({ answer: fallback(), mode: "rules" });
     const prompt = [
       "You are a concise chess coach inside a floating assistant. Answer ONLY from the facts JSON; it came from engine analysis and rule tags. Never evaluate positions yourself or invent numbers, moves or games. Call the engine's preferred move 'the coach move' and never say Stockfish.",

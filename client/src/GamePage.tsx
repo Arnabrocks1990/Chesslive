@@ -259,7 +259,7 @@ function AssistPanel({ s, game }: { s: Suggestion | null; game: GameState }) {
     <div className="card assist">
       <h3>AI assist <em className="badge">admin only</em></h3>
       {!fresh ? (
-        <p className="muted">Analysing position…</p>
+        <p className="muted">Analyzing position…</p>
       ) : (
         <>
           <p className="muted">Best for {game.turn === "w" ? "White" : "Black"} · eval {fmtEval(s.eval_cp, s.mate)}</p>
@@ -321,7 +321,7 @@ function Report({ code }: { code: string }) {
   return (
     <div className="card report">
       <h3>Game report</h3>
-      {!r.ready && <p className="muted">Analysing… {r.progress.done}/{r.progress.total}</p>}
+      {!r.ready && <p className="muted">Analyzing… {r.progress.done}/{r.progress.total}</p>}
       <table>
         <thead><tr><th></th><th>Accuracy</th><th>Inacc.</th><th>Mistakes</th><th>Blunders</th></tr></thead>
         <tbody>{line("White", r.white)}{line("Black", r.black)}</tbody>

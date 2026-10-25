@@ -125,3 +125,6 @@ export function usePlain(playerId: number | null, enabled: boolean, hasPlan: boo
   }, [enabled, playerId, hasPlan]);
   return { plain: enabled ? data : null, state, error };
 }
+
+/** Agent step summaries, worded for players (older stored steps used the engine name and British spelling). */
+export const stepText = (t: string) => String(t ?? "").replace(/^Stockfish /, "Analyzing ").replace(/^Analysed /, "Analyzed ").replace(/analysed/g, "analyzed");

@@ -21,7 +21,7 @@ Chess.com tells you which move was wrong. We tell you **why you keep making the 
 ## 4. Positioning vs. alternatives
 | | Chess.com / Lichess review | ChatGPT alone | This product |
 |---|---|---|---|
-| Per-game engine eval | Yes | Unreliable (LLMs misjudge positions) | Yes (Stockfish) |
+| Per-game engine eval | Yes | Unreliable (LLMs misjudge positions) | Yes (the engine) |
 | Plain-language reason | Limited | Yes, but ungrounded | Yes, grounded in engine lines |
 | Cross-game pattern diagnosis | No | No | **Yes (core)** |
 | Weekly plan + drills from *your* mistakes | Generic puzzles | No | **Yes (core)** |
@@ -33,11 +33,11 @@ Honest caveat: Chess.com could add pattern tracking. Defence is speed, platform 
 
 ### P0: must work in the live demo
 1. **Import:** enter a Lichess or Chess.com username -> fetch last 10-20 games (public APIs, no auth). Also paste PGN.
-2. **Analyse:** Stockfish analyses every position of the user's games (existing worker, `post` jobs). Progress bar while running.
+2. **Analyse:** the engine analyses every position of the user's games (existing worker, `post` jobs). Progress bar while running.
 3. **Tag mistakes:** each blunder/mistake gets a phase (opening/middlegame/endgame) and a theme (see section 8). Rule-based, deterministic.
 4. **Weakness report:** top 3 recurring weaknesses with counts and one example position each, e.g. "You hang pieces to forks: 7 times in 12 games."
 5. **LLM coach summary:** one call per report -> plain-language diagnosis at the player's level + a 7-day plan. Grounded in the tagged mistakes and engine lines passed in the prompt (the model never evaluates positions itself).
-6. **Mistake Trainer:** replay your own blunder positions on a board and find the best move (answer = stored Stockfish top move). No puzzle database needed.
+6. **Mistake Trainer:** replay your own blunder positions on a board and find the best move (answer = stored engine's top move). No puzzle database needed.
 7. **Shareable report page** (public link + screenshot-friendly) for the demo and for distribution.
 
 ### P1: if time allows
@@ -101,7 +101,7 @@ Themes are heuristics. Label them "likely cause" in the UI; do not over-claim.
 - Free: 1 report (10 games) per month.
 - Pro: INR 299/month or USD 4.99/month: unlimited imports, weekly plan, progress tracking, trainer.
 - Academy: INR 99 per student per month, coach dashboard (phase 2).
-- Unit cost: about INR 1-4 per report call plus compute; Stockfish cost is near zero per game at depth 12.
+- Unit cost: about INR 1-4 per report call plus compute; engine cost is near zero per game at depth 12.
 
 ## 12. Success metrics
 Hackathon: 20 distinct users who import a username or PGN and view a report; at least 8 complete a trainer set; at least 5 give a one-line quote; any paid or pre-commit sign-ups (even INR 99).
@@ -121,7 +121,7 @@ Product: reports per user, second-visit rate, blunders per 100 moves trend, trai
 ## 14. Build plan mapped to existing code
 | Task | Reuse | New work |
 |---|---|---|
-| Stockfish analysis, queue | `worker/worker.py` (`post` jobs), `analyse()` | Add theme tagging; run N replicas in `docker-compose.yml` |
+| engine analysis, queue | `worker/worker.py` (`post` jobs), `analyse()` | Add theme tagging; run N replicas in `docker-compose.yml` |
 | Mistake labels, accuracy | `server/src/report.ts` | Persist to `mistakes`; add `phase` |
 | Profile aggregation | `server/src/profile.ts` | Cross-game theme aggregation endpoint |
 | Game storage | `games`, `moves`, `analyses` | `source`/`player_color` columns; PGN importer |

@@ -25,7 +25,7 @@ Chess.com tells you what you got wrong. This coach decides what you should pract
 Status key: **Verified** = exercised against the running system (API or real data). **Built** = implemented and builds/typechecks but not exercised end to end. **Stub** = visible placeholder.
 
 ### 4.1 Chess Live base (existing prototype, extended)
-- Multiplayer games with invite links, clocks, resign/draw, Stockfish bot, Elo ratings, profiles, leaderboard, game reports. (Verified earlier; unchanged.)
+- Multiplayer games with invite links, clocks, resign/draw, Coach, Elo ratings, profiles, leaderboard, game reports. (Verified earlier; unchanged.)
 - Live AI assist remains **admin-only**; the coach never assists players during a game.
 - **Game modes (new):** Bullet (1+0, 1+1, 2+1), Blitz (3+0, 3+2, 5+0, 5+3), Rapid (10+0, 10+5, 15+10), Classical (30+0, 30+20, 60+0) and custom time. Mode label shown in "My games" and above the board. Verified: server honours each control. One shared Elo for all modes (no per-mode ratings).
 
@@ -33,7 +33,7 @@ Status key: **Verified** = exercised against the running system (API or real dat
 | Capability | Detail | Status |
 |---|---|---|
 | Import | Lichess username (finished games, with clocks), pasted PGN. Chess.com importer written but the API returned 403 from this network | Lichess Verified; Chess.com untested; PGN Built |
-| Analysis | Existing Stockfish worker, post-game queue. About 0.12 s per position measured (91-ply game in 11 s) | Verified |
+| Analysis | Existing analysis worker, post-game queue. About 0.12 s per position measured (91-ply game in 11 s) | Verified |
 | Mistake tagging | Rule-based: hanging piece, missed tactic, missed mate, allowed mate, back-rank, opening error, endgame conversion, time trouble, other. Thresholds match `report.ts` | Verified on real games; labels are "likely cause" |
 | Weakness ranking | Score = frequency x win-chance loss x recency; per-100-moves trend between two windows of games; "other" never becomes a coaching focus | Verified |
 | Planner | LLM decides one of keep_plan / adjust_focus / escalate / nudge / ask_more_games from structured facts; rules fallback if the call fails. Calls the Anthropic API (`ANTHROPIC_API_KEY` in `server/.env`, model `claude-sonnet-5-5`). Earlier verification ran on the Claude CLI; the API path is wired but not yet verified (the key supplied was rejected with 401) | Built |
@@ -43,11 +43,11 @@ Status key: **Verified** = exercised against the running system (API or real dat
 | Nudges | Stored as a preview only; nothing is sent | Stub |
 | Report sharing, delete | Public read-only report by token; delete-my-data | Verified |
 
-Division of labour: **Stockfish and rule code are the source of truth for chess facts. The LLM chooses, explains and writes.** Player-facing text calls the engine's move "the coach move".
+Division of labour: **The engine and rule code are the source of truth for chess facts. The LLM chooses, explains and writes.** Player-facing text calls the engine's move "the coach move".
 
 ### 4.3 Outcome-based 7-day plan (new)
 The plan is no longer a list of advice. Each day is a session with a measurable outcome.
-- **Session types:** drill (5 positions from the player's own mistakes, target 3 of 5), review (re-solve the toughest or previously missed positions), practice game (15+10 vs the bot, target at most 2 blunders, judged by the post-game Stockfish report).
+- **Session types:** drill (5 positions from the player's own mistakes, target 3 of 5), review (re-solve the toughest or previously missed positions), practice game (15+10 vs the bot, target at most 2 blunders, judged by the post-game the engine report).
 - **Each day has three parts:** Learn (authored lesson with habits and a "before every move" checklist), Practise, Milestone.
 - **Progression:** day N unlocks when day N-1 reaches its milestone. Timeline UI with done, current, locked and payment states and a milestones progress bar.
 - **Adaptation (logged in the agent trace):** first miss keeps the day open with a retry set that puts missed positions first; second miss moves on "with support" and queues the missed positions in Train; finishing day 7 starts a weekly review run that builds the next plan.
@@ -98,20 +98,20 @@ Node/TS Express + Socket.IO server
    - learner.ts: XP, levels, leaderboard, beginner bot
    - claude.ts: Anthropic API client for decisions and text (rules fallback when it fails)
    |                          |
-Python worker (Stockfish)     Postgres (pgvector) + Redis, in Docker
+Python worker (the engine)     Postgres (pgvector) + Redis, in Docker
 ```
 Tables added: players, mistakes, drills, plans, plan_sessions, session_questions, subscriptions, plain_cache, agent_runs, agent_steps, learner_progress, learner_events; columns added to games (source, external_id, player_id, player_color, played_at) and users (learner). Created idempotently at boot.
 
 ## 7. Guardrails
 - **Fair play:** analyses finished games only; no coach on live game pages; live assist stays admin-only.
-- **Truth:** hints, plain text and drill answers are derived from stored Stockfish output and rules; the LLM is prompted never to evaluate positions and to restate only engine data.
+- **Truth:** hints, plain text and drill answers are derived from stored engine output and rules; the LLM is prompted never to evaluate positions and to restate only engine data.
 - **Consent and privacy:** public games of the entered username or uploaded PGN; delete-my-data.
 - **Cost and safety:** step-limited deterministic loop, two LLM calls per run, rules fallback, one run per player at a time.
 - **Human control:** the plan and every agent action are visible; admin reset is role-checked on the server.
 
 ## 8. Business model (estimates, not measured)
 - Free: Days 1-2 and Learner mode. Pro: INR 299 per month (or about USD 4.99) for Days 3-7, practice-game judging, weekly review and autonomous updates. Academy seats are a phase-2 idea.
-- Variable cost: Stockfish is near zero per game; LLM cost per run is an estimate of INR 3-8 on a mid-tier model; LLM calls now use the Anthropic API, so they are billed per token and no longer serialised.
+- Variable cost: the engine is near zero per game; LLM cost per run is an estimate of INR 3-8 on a mid-tier model; LLM calls now use the Anthropic API, so they are billed per token and no longer serialised.
 - Market sizing in v2 stays as a rough estimate and should be re-verified before presenting.
 
 ## 9. Success metrics
@@ -125,7 +125,7 @@ Tables added: players, mistakes, drills, plans, plan_sessions, session_questions
 | Real payments absent | By design for now |
 | Anthropic API key rejected (401 invalid x-api-key) in the last test, so AI features currently run on rule fallbacks | Open: needs a valid key in `server/.env` |
 | Chess.com import blocked here (403) | Use Lichess or PGN |
-| Replit deployment: no Docker there, so Postgres+pgvector, Redis and the Stockfish worker need replacing | Not done; verify Stockfish on Replit before the event |
+| Replit deployment: no Docker there, so Postgres+pgvector, Redis and the analysis worker need replacing | Not done; verify the engine on Replit before the event |
 | Learner XP from lessons is client-reported | Known; server-side lesson verification is the fix |
 | Tag labels can misfire; many mistakes land in "Other" | Labelled "likely cause" |
 | Simulated games are fabricated openings with scripted endings | Always labelled "simulated" |

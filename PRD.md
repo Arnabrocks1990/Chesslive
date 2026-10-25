@@ -60,7 +60,7 @@ Non-goals (v1): native mobile apps, tournaments, money/betting, video chat, scre
 - M5 Feedback loop: record whether suggestions were followed and how they turned out.
 
 ## 6. How the agent actually "gets smarter" (honest scope)
-The core move engine (Stockfish) does not learn from our games and will not get stronger from them. Improvement comes from layers around it:
+The core move engine (the engine) does not learn from our games and will not get stronger from them. Improvement comes from layers around it:
 1. Retrieval memory (pgvector): similar positions, past outcomes, opponent tendencies.
 2. Player modelling: suggest moves a given player can realistically execute and exploit an opponent's known weaknesses.
 3. Better explanations: an LLM turns engine lines plus retrieved history into coaching text; quality improves with more context.
@@ -86,14 +86,14 @@ Game/API server (Node.js + TypeScript)
   - publishes "move" events to Redis streams
   |                                |
 PostgreSQL + pgvector        Analysis workers (Python)
-  users, games, moves,         - Stockfish via UCI (engine pool)
+  users, games, moves,         - the engine via UCI (engine pool)
   analysis, embeddings,        - embedding + retrieval (pgvector)
   player profiles              - LLM explanation (Claude API)
                                - post-game reports / profile updates
 Redis: pub/sub, job queue, live game state cache
 ```
 
-Flow: player moves -> server validates and persists -> broadcasts -> emits event -> worker runs Stockfish + retrieves similar positions + drafts explanation -> result pushed back through the server, filtered by assist mode -> clients render.
+Flow: player moves -> server validates and persists -> broadcasts -> emits event -> worker runs the engine + retrieves similar positions + drafts explanation -> result pushed back through the server, filtered by assist mode -> clients render.
 
 ## 9. Technology choices
 
@@ -102,12 +102,12 @@ Flow: player moves -> server validates and persists -> broadcasts -> emits event
 | UI | React + TypeScript, Vite, react-chessboard, chess.js, Zustand/TanStack Query | Mature board components, shared types with the backend |
 | Realtime | Socket.IO (WebSocket) | Rooms, reconnects, fallbacks built in |
 | Backend API | Node.js + TypeScript (NestJS or Fastify) | See section 10 |
-| Analysis | Python worker + Stockfish (UCI), python-chess | Best chess/ML ecosystem |
+| Analysis | Python worker + the engine (UCI), python-chess | Best chess/ML ecosystem |
 | DB | PostgreSQL 16 + pgvector (HNSW index) | As requested; one store for relational + vectors |
 | ORM/migrations | Prisma or Drizzle (Node); SQLAlchemy only in workers | |
 | Queue/cache | Redis (BullMQ or Streams) | Decouples game loop from CPU-heavy analysis |
 | LLM | Claude API for explanations/coaching | Explanations grounded in engine lines and retrieved history |
-| Infra | Docker Compose locally; containers on a cloud host; CPU-optimised workers | Stockfish is CPU-bound |
+| Infra | Docker Compose locally; containers on a cloud host; CPU-optimised workers | The engine is CPU-bound |
 | Testing | Vitest, Playwright (multiplayer E2E), pytest | |
 
 ### Embedding positions in pgvector
@@ -125,14 +125,14 @@ Cosine search with HNSW; store eval and outcome alongside each vector.
 |---|---|---|
 | Realtime/WebSockets | Excellent: event loop suits many idle sockets, Socket.IO is mature | Good (FastAPI/websockets), but fewer batteries for rooms and reconnect |
 | Shared code with React | Same language and types; chess.js on both sides | Separate types; duplicate validation logic |
-| Chess/ML ecosystem | Adequate (chess.js, Stockfish via child process) | Best: python-chess, PyTorch, numpy, scikit-learn, embeddings tooling |
+| Chess/ML ecosystem | Adequate (chess.js, the engine via child process) | Best: python-chess, PyTorch, numpy, scikit-learn, embeddings tooling |
 | CPU-heavy work | Blocks the event loop unless offloaded | Also GIL-limited, but easy to run as separate worker processes |
-| Engine integration | Spawn Stockfish via UCI, fine | python-chess has first-class UCI engine support |
+| Engine integration | Spawn the engine via UCI, fine | python-chess has first-class UCI engine support |
 | Team velocity | One language across stack | Two languages if mixed with a JS frontend anyway |
 | Hiring/maintenance | Large pool | Large pool |
 | Learning/analytics roadmap | Weaker | Strong |
 
-Recommendation: hybrid. Node.js + TypeScript for the realtime game server and API (where concurrency and shared types matter), and Python workers for analysis, embeddings, and later model training (where the ecosystem matters). They communicate through Redis and share Postgres. If you want a single-language v1 to start faster, use Node only and add the Python worker when you reach the learning phase (M4/section 6.4); Stockfish works fine from Node.
+Recommendation: hybrid. Node.js + TypeScript for the realtime game server and API (where concurrency and shared types matter), and Python workers for analysis, embeddings, and later model training (where the ecosystem matters). They communicate through Redis and share Postgres. If you want a single-language v1 to start faster, use Node only and add the Python worker when you reach the learning phase (M4/section 6.4); the engine works fine from Node.
 
 ## 11. Plan of action
 
@@ -140,7 +140,7 @@ Recommendation: hybrid. Node.js + TypeScript for the realtime game server and AP
 |---|---|---|
 | 0. Foundations | Repo, Docker Compose (Postgres+pgvector, Redis), CI, schema, auth | 1 week |
 | 1. Live chess MVP | Lobby, invite links, real-time board, clocks, reconnect, persistence, replay | 3 weeks |
-| 2. Agent v1 | Stockfish worker, auto-start on live game, top-3 moves + eval, assist-mode enforcement, Vs. Bot | 2 weeks |
+| 2. Agent v1 | analysis worker, auto-start on live game, top-3 moves + eval, assist-mode enforcement, Vs. Bot | 2 weeks |
 | 3. Memory | Store full analytics, position embeddings, similar-position retrieval, opening stats | 2 weeks |
 | 4. Coaching | LLM explanations, post-game report, player profiles, feedback loop | 2 weeks |
 | 5. Hardening | Load test (500 games), abuse limits, observability, deploy | 2 weeks |
@@ -150,7 +150,7 @@ Estimates assume one to two engineers; they are rough, to be refined after Phase
 
 ## 12. Risks
 - Cheating/ToS: mitigated by Assist Mode and server-side enforcement (section 2).
-- Engine cost: Stockfish at depth 18 per move is CPU-heavy; mitigate with a worker pool, depth caps, caching by FEN, and analysing only assisted/coached games live.
+- Engine cost: the engine at depth 18 per move is CPU-heavy; mitigate with a worker pool, depth caps, caching by FEN, and analysing only assisted/coached games live.
 - "Learning" expectation mismatch: see section 6; set expectations that the engine itself does not improve.
 - Cold start: retrieval memory is useless with few games; seed with public PGN databases (e.g. Lichess open database, licence permitting).
 - Realtime correctness (clocks, reconnects): server-authoritative state and thorough multiplayer E2E tests.

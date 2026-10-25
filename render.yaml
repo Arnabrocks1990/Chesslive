@@ -1,7 +1,7 @@
 # Render Blueprint for Chess Live. See DEPLOY.md for the step-by-step guide.
 #
 #   web      Node server: API + WebSocket game server + the built React client (also serves /healthz)
-#   worker   Python + Stockfish analysis worker (Docker). Render has no free plan for workers.
+#   worker   Python + engine analysis worker (Docker). Render has no free plan for workers.
 #   db       Postgres with the pgvector extension (applied by the server at boot from db/init.sql)
 #   redis    Key Value instance holding the analysis / bot job queues
 #

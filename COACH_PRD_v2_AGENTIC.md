@@ -15,13 +15,13 @@ A report tool runs once when you ask. This product is an agent because it has al
 |---|---|
 | **Goal** | "Reduce this player's recurring mistakes and raise their accuracy over the next 4 weeks" |
 | **Autonomy** | Triggers itself when new games appear; no prompt needed |
-| **Tools** | Fetch games, run Stockfish, tag mistakes, generate drills, update plan, send nudges, evaluate progress |
+| **Tools** | Fetch games, run the engine, tag mistakes, generate drills, update plan, send nudges, evaluate progress |
 | **Memory** | Per-player profile: weaknesses, history, plan, drill results, preferences |
 | **Planning loop** | Observe -> diagnose -> plan -> act -> evaluate -> adapt |
 | **Adaptation** | Plan changes based on results (drills passed, weakness trend, new games) |
 | **Observable trace** | Every action is logged and shown to the user ("what the coach did and why") |
 
-Division of labour: **Stockfish and rule-based code are the source of truth for chess facts. The LLM decides what to do next, explains, prioritises and writes.** The LLM never evaluates positions itself.
+Division of labour: **The engine and rule-based code are the source of truth for chess facts. The LLM decides what to do next, explains, prioritises and writes.** The LLM never evaluates positions itself.
 
 ## 3. Problem
 - Players at roughly 600-1800 Elo repeat the same few mistake types for hundreds of games.
@@ -49,7 +49,7 @@ Division of labour: **Stockfish and rule-based code are the source of truth for 
 | Tool | Type | Purpose |
 |---|---|---|
 | `fetch_games(username, platform, since)` | Deterministic | Pull recent finished games from Lichess or Chess.com public APIs |
-| `analyse_game(game_id, depth)` | Deterministic (Stockfish) | Eval every position; store top moves and scores |
+| `analyse_game(game_id, depth)` | Deterministic (the engine) | Eval every position; store top moves and scores |
 | `tag_mistakes(game_id)` | Deterministic (rules) | Classify each inaccuracy, mistake and blunder by phase and theme |
 | `get_player_memory(player_id)` | Deterministic | Weakness counts, trend, current plan, drill history, preferences |
 | `rank_weaknesses(player_id)` | Deterministic | Score themes by frequency x cost in win probability x recency |
@@ -81,7 +81,7 @@ The planner is a Claude tool-use loop with a step cap (about 12 steps), a per-ru
 
 ### 5.5 Guardrails
 - **Fair play:** the product analyses only finished games. No live in-game assistance for players; the existing admin-only live assist stays disabled in the coach experience.
-- **Truth:** all chess claims come from Stockfish output and rule tags passed to the model; low-confidence themes are labelled "likely cause".
+- **Truth:** all chess claims come from engine output and rule tags passed to the model; low-confidence themes are labelled "likely cause".
 - **Consent and privacy:** analyses only the user's own public games (or uploaded PGN); delete-my-data option; nudges only after opt-in.
 - **Cost and safety:** step cap, token budget per run, rate limits on fetching and nudging, kill switch.
 - **Human control:** the user can edit or reject the plan, mute nudges, and see a trace of every action.
@@ -100,7 +100,7 @@ The planner is a Claude tool-use loop with a step cap (about 12 steps), a per-ru
 
 ### P0 (must work in the live demo)
 1. Import from Lichess or Chess.com username, or pasted PGN.
-2. Analysis with Stockfish via the existing worker (`post` jobs) at depth 10-12; progress shown.
+2. Analysis with the engine via the existing worker (`post` jobs) at depth 10-12; progress shown.
 3. Rule-based mistake tagging (phase and theme) stored per game.
 4. **Coach agent loop** with tool calls (observe, analyse, diagnose, plan, drills) and a **live step trace** in the UI.
 5. Weakness report and 7-day plan written by the LLM from structured inputs.
@@ -156,13 +156,13 @@ Node/TS API
    - Tool layer: deterministic functions + LLM-backed functions
    |                         |
 Analysis worker (Python)      DB: Postgres or SQLite (MVP)
-   Stockfish via python-chess    games, mistakes, plans, drills, runs, steps
+   the engine via python-chess    games, mistakes, plans, drills, runs, steps
 ```
-Reuse: `worker/worker.py` (Stockfish, `analyse`), `server/src/report.ts` (accuracy and labels), `profile.ts` (aggregation), board UI in `client/src/GamePage.tsx`.
+Reuse: `worker/worker.py` (the engine, `analyse`), `server/src/report.ts` (accuracy and labels), `profile.ts` (aggregation), board UI in `client/src/GamePage.tsx`.
 Replace for the event: `server/src/claude.ts` shells out to the Claude Code CLI on the team plan; use the Anthropic API with an API key for multi-user use (the CLI path is serialised and runs on an organisation seat).
 
 ### Replit adaptation
-Replit does not run Docker Compose. For the demo: SQLite or Replit Postgres instead of Postgres plus pgvector, an in-process job queue instead of Redis, Stockfish installed through Nix (or a bundled binary), a Reserved VM deployment, and secrets in Replit Secrets. Verify Stockfish launches on Replit before the event.
+Replit does not run Docker Compose. For the demo: SQLite or Replit Postgres instead of Postgres plus pgvector, an in-process job queue instead of Redis, the engine installed through Nix (or a bundled binary), a Reserved VM deployment, and secrets in Replit Secrets. Verify the engine launches on Replit before the event.
 
 ## 11. Business model, payments and commercial plan
 Full detail: `COMMERCIAL_PLAN.md`. All figures are estimates.
@@ -176,7 +176,7 @@ Full detail: `COMMERCIAL_PLAN.md`. All figures are estimates.
 | Academy | INR 99 per student per month plus GST, minimum 10 students | Coach dashboard, student summaries (phase 2) |
 
 ### 11.2 Unit economics (summary)
-- Variable cost per Pro user about INR 25-60 per month (agent cycles plus Stockfish); Sprint Pass about INR 10-25.
+- Variable cost per Pro user about INR 25-60 per month (agent cycles plus the engine); Sprint Pass about INR 10-25.
 - After GST and an assumed gateway fee of about 2%, gross margin is about 74-88% on Pro monthly and about 68-86% on Sprint Pass.
 - Fixed cost about INR 6,000-22,000 per month (Render hosting covered by event credits at first). Break-even about 100-150 paying users. Free users cost about INR 3-8 each, so the free tier is capped.
 
@@ -199,7 +199,7 @@ Full detail: `COMMERCIAL_PLAN.md`. All figures are estimates.
 | Analysis too slow for live users | Depth 10; run 2-4 worker processes; cap at 10 games; pre-analyse the demo account; queue with ETA |
 | Autonomy demo depends on a live game | "Simulate new game" fallback with a stored game |
 | Theme tags misfire | Label as "likely cause"; keep "Other"; always show the engine move |
-| LLM chess hallucination | Evaluate only with Stockfish; pass engine lines; strict output schema |
+| LLM chess hallucination | Evaluate only with the engine; pass engine lines; strict output schema |
 | Agent loop cost or runaway | Step cap, token budget, kill switch, cheaper model for routine steps |
 | Chess.com or Lichess API limits | Cache by game id; respect rate limits; PGN paste fallback |
 | Competitors add pattern tracking | Cross-platform, coach-and-academy channel, drill and progress loop |

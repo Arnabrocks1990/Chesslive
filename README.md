@@ -8,7 +8,7 @@ Browser-based multiplayer chess with an AI move-suggestion agent. See [PRD.md](P
 ## Run (localhost)
 
 ```
-docker compose up -d --build      # Postgres+pgvector (5455), Redis (6380), Stockfish worker
+docker compose up -d --build      # Postgres+pgvector (5455), Redis (6380), analysis worker
 cd client && npm install && npm run build
 cd ../server && npm install && npm start
 ```
@@ -35,29 +35,29 @@ Admin login: `admin` / `admin123` (override with `ADMIN_USERNAME`, `ADMIN_PASSWO
 - Live AI assistance (top-3 moves, eval, arrows, Claude explanation, similar past positions) is sent **only to admin sockets**. Everyone else plays without it; the server never emits suggestions to non-admins.
 - When a game ends, every position is analysed by the worker and a report (accuracy, mistakes, blunders) is available to all players.
 - Every game, move, analysis and position embedding is stored in Postgres; similar-position retrieval uses pgvector.
-- Improve your Game (/improve): puzzles built from the player's last five finished games (positions where Stockfish found a clearly better move), topped up with 12 verified built-in puzzles for new players. Hints are the coach's three progressive hints. Personal dashboard (/dashboard): record, rating trend, accuracy, mistakes by phase and habit, puzzle progress, and an AI Coach recommendation when the numbers call for it.
+- Improve your Game (/improve): puzzles built from the player's last five finished games (positions where the engine found a clearly better move), topped up with 12 verified built-in puzzles for new players. Hints are the coach's three progressive hints. Personal dashboard (/dashboard): record, rating trend, accuracy, mistakes by phase and habit, puzzle progress, and an AI Coach recommendation when the numbers call for it.
 - Daily puzzle + streak: everyone gets the same verified puzzle each day (rotating through ~45), with the coach's hints. Solving it on the day extends a streak shown on the lobby, the Improve page and the dashboard, with a 5-day badge. Days roll over at midnight in DAILY_TZ (default Asia/Kolkata).
 - Matchmaking: "Find a random opponent" pairs players with the same time control and a similar Elo; the allowed gap widens while waiting.
 - Elo ratings: every new user starts at 600 (accounts created before that keep their rating). K=32 for the first 30 rated games, then 20. Games under 4 plies are unrated. Bot games are rated for the human against the bot's nominal strength (1400/1800/2300, max = 3200); the bot itself is never rated. Leaderboard in the lobby, rating on profiles and next to player names. Games finished before this feature were not rated retroactively.
-- Play against the Stockfish bot (easy ~1400 / medium ~1800 / hard ~2300 / max) from the lobby.
+- Play against the Coach (easy ~1400 / medium ~1800 / hard ~2300 / max) from the lobby.
 - Profiles at `/u/<username>`: record, accuracy, blunder rate, openings, recent games.
 - Learned model: after every finished game the worker retrains a logistic-regression "who wins from here" model on stored positions and their game results (needs 100+ labelled positions; validated on held-out games). Its White-win chance is shown in the admin assist panel. With few games it is weak and noisy.
 - Explanations run through the Claude Code CLI (team plan, no API key). Set `EXPLAIN=0` to disable.
 
 ## AI Coach (agentic)
 
-Open `/coach`. Enter a Lichess username (or paste a PGN) and the coach agent runs by itself: fetch games, Stockfish analysis, rule-based mistake tagging, weakness ranking, an LLM planning decision, drills built from your own mistakes, a 7-day plan, and a progress comparison. Every step is logged (`agent_runs`, `agent_steps`) and shown live in the UI. See `COACH_PRD_v2_AGENTIC.md`.
+Open `/coach`. Enter a Lichess username (or paste a PGN) and the coach agent runs by itself: fetch games, engine analysis, rule-based mistake tagging, weakness ranking, an LLM planning decision, drills built from your own mistakes, a 7-day plan, and a progress comparison. Every step is logged (`agent_runs`, `agent_steps`) and shown live in the UI. See `COACH_PRD_v2_AGENTIC.md`.
 
 - Code: `server/src/coach/` (importer, analysis queue, tagger, agent, routes, samples), UI in `client/src/CoachPage.tsx`. Tables are created on boot (`schema.ts`), no volume reset needed.
 - Autonomy: a poller (`COACH_POLL_MS`, default 5 min; `0` disables) wakes the agent when a followed account has new games, or when a player has been idle (`COACH_IDLE_HOURS`, default 72). The **Simulate new game** button injects a stored, clearly labelled game for demos.
-- LLM decisions, plans, explanations and the coach chat use the Anthropic API. Put `ANTHROPIC_API_KEY` in `server/.env` (copy `server/.env.example`; `.env` is git-ignored; `npm start` loads it). `CLAUDE_MODEL` defaults to `claude-sonnet-5-5`. Without a key, or with `EXPLAIN=0`, every AI feature falls back to its rule-based version. Stockfish and rules own all chess facts.
+- LLM decisions, plans, explanations and the coach chat use the Anthropic API. Put `ANTHROPIC_API_KEY` in `server/.env` (copy `server/.env.example`; `.env` is git-ignored; `npm start` loads it). `CLAUDE_MODEL` defaults to `claude-sonnet-5-5`. Without a key, or with `EXPLAIN=0`, every AI feature falls back to its rule-based version. The engine and rules own all chess facts.
 - Voiceover: during the 7-day plan the coach reads lessons, hints, answers and milestone results aloud. ElevenLabs (`ELEVENLABS_API_KEY` in `server/.env`, voice `ELEVENLABS_VOICE_ID`, default Alice) is called through `POST /api/coach/tts` so the key stays on the server; audio is cached in `server/data/tts/`. If ElevenLabs is missing, over quota or down, the browser's own speech engine (the Windows voices on Windows) reads the text instead. The free plan is 10,000 characters a month, so repeats are cached and each user is limited to about 2,500 characters an hour. A Voice on/off switch sits next to the language tabs.
 - Finished games only; no live-game assistance for players. `POST /api/coach/players/:id/delete` removes a player's data.
 - Chess.com import is implemented but the API returned 403 from this network in testing; use Lichess or PGN paste if it does.
 
 ## Deploying
 
-See [DEPLOY.md](DEPLOY.md) for Render (`render.yaml` Blueprint: web service, Stockfish worker, Postgres with pgvector, Redis). In production the server refuses to start with the default admin password or JWT secret. Check a deployment with `node server/test/deploy.mjs` (see the file header).
+See [DEPLOY.md](DEPLOY.md) for Render (`render.yaml` Blueprint: web service, analysis worker, Postgres with pgvector, Redis). In production the server refuses to start with the default admin password or JWT secret. Check a deployment with `node server/test/deploy.mjs` (see the file header).
 
 ## Privacy
 
@@ -86,7 +86,7 @@ With the stack and servers running (each creates and removes its own data): `nod
 ## Layout
 
 - `server/` Node + TypeScript: REST, Socket.IO, game rules/clocks (chess.js), persistence, analysis queue
-- `worker/` Python: Stockfish via python-chess, embeddings, pgvector writes
+- `worker/` Python: the engine via python-chess, embeddings, pgvector writes
 - `client/` React + Vite
 - `db/init.sql` schema (runs on first container start; `docker compose down -v` to reset)
 
